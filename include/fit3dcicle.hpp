@@ -33,7 +33,7 @@ public:
     template <typename Derived>
     static int OuterProduct(const Eigen::MatrixBase<Derived> &y,
                             const Eigen::MatrixBase<Derived> &x,
-                            Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> &val)
+                            Eigen::Matrix<typename Derived::Scalar, 10, 1> &val)
     {
         typedef typename Derived::Scalar Scalar_t;
         Eigen::Matrix<Scalar_t,3,3> yhat;
@@ -43,10 +43,10 @@ public:
         Eigen::Matrix<Scalar_t, 10, 5> A;
         A.setZero();
         A.template block<3, 3>(0, 0) = yhat;
-        A.template block(3, 0, 3, 3) = y0_eye;
-        A.template block<3,1>(3, 3) = -y.head(3);
-        A.template block<3,3>(6, 0) = -yinf_eye;
-        A.template block<3,1>(6, 4) = y.head(3);
+        A.template block<3, 3>(3, 0) = y0_eye;
+        A.template block<3, 1>(3, 3) = -y.head(3);
+        A.template block<3, 3>(6, 0) = -yinf_eye;
+        A.template block<3, 1>(6, 4) = y.head(3);
         A(9,3) = -y(4);
         A(9,4) = y(3);
         val = A*x;
@@ -70,7 +70,7 @@ public:
             Scalar_t vnorm4 = vnorm2*vnorm2;
             
             DDt.template block<3,3>(0, 0) = DDt.template block<3,3>(0, 0) + v * v.transpose();
-            DDt.template block<3,1>(0, 0) = DDt.template block<3,1>(0, 0) -0.5 * vnorm2 * v;
+            DDt.template block<3,1>(0, 3) = DDt.template block<3,1>(0, 3) -0.5 * vnorm2 * v;
             DDt.template block<3,1>(0, 4) = DDt.template block<3,1>(0, 4) -v;
             
             DDt.template block<1,3>(3, 0) = DDt.template block<1,3>(3, 0) + v.transpose();
@@ -86,26 +86,25 @@ public:
         return 0;
     }
     
-    
     template <typename Derived>
-    static int ExtractGeometricParameters(const Eigen::MatrixBase<Derived> &e,
-                                          Eigen::Matrix<typename Derived::Scalar, 3, 1> &c,
+    static int ExtractGeometricParameters(const Eigen::Matrix<typename Derived::Scalar, 10, 1> &e,
+                                          Eigen::MatrixBase<Derived> &c,
                                           typename Derived::Scalar &radius)
     {
         typedef typename Derived::Scalar Scalar_t;
         auto ei = e.head(3);
-        auto eoi = e.segment<3>(3);//e.middleRows(3,3);
-        auto einfi = e.segment<3>(6);//e.middleRows(6,3);
+        auto eoi = e.template segment<3>(3);//e.middleRows(3,3);
+        auto einfi = e.template segment<3>(6);//e.middleRows(6,3);
         auto eoinf = -e[9];
         auto alpha = eoi.norm();
         auto n1 = -eoi/alpha;
         auto n = -eoi;
         auto B0 = eoinf;
         auto B1 = ei[0], B2 = ei[1], B3 = ei[2];
-        
+                
         Eigen::Matrix<Scalar_t, 3, 3> A;
         A.row(0) << B0,-B3,B2;
-        A.row(1) << B3, B0,B1;
+        A.row(1) << B3, B0,-B1;
         A.row(2) << -B2,B1,B0;
         c = A*n/(n.norm() * n.norm());
         radius = c.norm()*c.norm()-2*n1.dot(einfi)/alpha-2*(c.dot(n1))*(c.dot(n1));
@@ -139,6 +138,7 @@ public:
         Eigen::Matrix<Scalar_t, 5, 1> sol2 = eigSolver.eigenvectors().col(index2).real();
         Eigen::Matrix<Scalar_t, 5, 1> sol1 = eigSolver.eigenvectors().col(index1).real();
         Eigen::Matrix<Scalar_t, 10, 1> sol_final;
+        
         OuterProduct(sol2, sol1, sol_final);
         ExtractGeometricParameters(sol_final, center, radius);
         return 0;
