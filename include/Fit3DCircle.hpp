@@ -144,7 +144,6 @@ public:
         return 0;
     }
     
-    // todo, add test,
     // todo, add ransac
 
 };

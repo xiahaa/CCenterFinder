@@ -7,10 +7,12 @@
 //
 
 #include <iostream>
-#include "fit3dcicle.hpp"
+#include "Fit3DCircle.hpp"
 #include <Eigen/Dense>
 #include <Eigen/Core>
 #include <opencv2/core.hpp>
+#include "timer.hpp"
+
 
 template <typename T, typename Derived, typename Point3>
 void GenerateCircleByAngles(std::vector<T> tlist, Derived c, T r, T theta, T phi, std::vector<Point3> &circle_points)
@@ -32,7 +34,7 @@ void GenerateCircleByAngles(std::vector<T> tlist, Derived c, T r, T theta, T phi
     }
     return;
 }
-
+#if 0
 double test_data[] = {
     1.6832706697750046,0.9751299488013927,4.121819521070186,
     1.843071406095262,0.7714591223004006,4.094673424895004,
@@ -151,7 +153,7 @@ int main(int argc, const char * argv[]) {
 //    Eigen::VectorXd t = Eigen::VectorXd::LinSpaced(100,0.0,2*M_PI).transpose();
     std::vector<double> tlist;
     double ang = 0;
-    const double step = 2*M_PI / 100;
+    const double step = 2*M_PI / 150.0;
     while (ang <= 2*M_PI)
     {
         tlist.push_back(ang);
@@ -162,11 +164,11 @@ int main(int argc, const char * argv[]) {
     GenerateCircleByAngles<double, Eigen::VectorXd, cv::Point3d>(tlist, c, r, theta, phi, circle_points);
     
     // use test data
-    circle_points.clear();
-    for (int i = 0; i < sizeof(test_data)/sizeof(double)/3; i++)
-    {
-        circle_points.push_back(cv::Point3d(test_data[i*3],test_data[i*3+1],test_data[i*3+2]));
-    }
+//    circle_points.clear();
+//    for (int i = 0; i < sizeof(test_data)/sizeof(double)/3; i++)
+//    {
+//        circle_points.push_back(cv::Point3d(test_data[(i)*3],test_data[(i)*3+1],test_data[(i)*3+2]));
+//    }
     
 //    for (auto pt : circle_points)
 //        std::cout << pt.x << "," << pt.y << "," << pt.z << std::endl;
@@ -181,3 +183,94 @@ int main(int argc, const char * argv[]) {
     
     return 0;
 }
+#endif
+
+#if 1
+#include <iostream>
+//#include <opencv2/opencv.hpp>
+#include <cmath>
+#include <random>
+#include <cstdint>
+
+#include "GRANSAC.hpp"
+#include "Circle3DModel.hpp"
+
+int main(int argc, char * argv[])
+{
+    /*-------------------------------------------------------------------------------
+     Generating circle
+     -------------------------------------------------------------------------------*/
+    double r = 2.5;               // Radius
+    double c_array[] = {3,3,4};
+    Eigen::Map<Eigen::VectorXd, 0> c(c_array, 3);// Center
+    double theta = 45.0/180*M_PI;     // Azimuth
+    double phi   = -30.0/180*M_PI;    // Zenith
+
+    //    Eigen::VectorXd t = Eigen::VectorXd::LinSpaced(100,0.0,2*M_PI).transpose();
+    std::vector<double> tlist;
+    double ang = 0;
+    const double step = 2*M_PI / 100;
+    while (ang <= 2*M_PI)
+    {
+        tlist.push_back(ang);
+        ang+=step;
+    }
+    std::vector<cv::Point3d> circle_points;
+    GenerateCircleByAngles<double, Eigen::VectorXd, cv::Point3d>(tlist, c, r, theta, phi, circle_points);
+
+    
+
+    std::random_device SeedDevice;
+    std::mt19937 RNG = std::mt19937(SeedDevice());
+    std::uniform_int_distribution<int> UniDist(5, 10); // [Incl, Incl]
+    int Perturb = 0.01;
+    std::normal_distribution<GRANSAC::VPFloat> PerturbDist(0, Perturb);
+
+    std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> CandPoints;
+    for (int i = 0; i < circle_points.size(); ++i)
+    {
+        cv::Point3d pt(circle_points[i].x+PerturbDist(RNG),
+                       circle_points[i].y+PerturbDist(RNG),
+                       circle_points[i].z+PerturbDist(RNG));
+        std::shared_ptr<GRANSAC::AbstractParameter> CandPt = std::make_shared<Point3D>(pt.x, pt.y, pt.z);
+        CandPoints.push_back(CandPt);
+    }
+
+    for (int i = 0; i < 30; ++i)
+    {
+        cv::Point3d pt(UniDist(RNG) + PerturbDist(RNG),
+                       UniDist(RNG) + PerturbDist(RNG),
+                       UniDist(RNG) + PerturbDist(RNG));
+        std::shared_ptr<GRANSAC::AbstractParameter> CandPt = std::make_shared<Point3D>(pt.x, pt.y, pt.z);
+        CandPoints.push_back(CandPt);
+    }
+
+    Timer timer;
+    GRANSAC::RANSAC<Circle3DModel, 5> Estimator;
+    Estimator.Initialize(0.1, 300); // Threshold, iterations
+    timer.tic();
+    Estimator.Estimate(CandPoints);
+    timer.toc(std::string("Estimate: "));
+    
+    auto BestInliers = Estimator.GetBestInliers();
+    if (BestInliers.size() > 0)
+    {
+        circle_points.clear();
+        for (auto& Inlier : BestInliers)
+        {
+            auto RPt = std::dynamic_pointer_cast<Point3D>(Inlier);
+            cv::Point3d Pt(RPt->x, RPt->y, RPt->z);
+            circle_points.emplace_back(Pt);
+        }
+        Eigen::Matrix<double, 3, 1> fit_center;
+        double fit_radius;
+
+        ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
+
+        std::cout << "fit_center: " << fit_center << std::endl;
+        std::cout << "fit_radius: " << fit_radius << std::endl;
+    }
+    
+    return 0;
+}
+#endif
