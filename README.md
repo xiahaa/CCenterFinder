@@ -1,6 +1,6 @@
 # TODO:
-1. find relevent data;
-2. finish C++ ransac version;
+1. find relevant data;~~
+2. ~~finish C++ ransac version;~~
 3. add python version;
 
 # CCenterFinder
@@ -8,7 +8,7 @@ This repository contains our implementation on accurately localizing 3D and 2D c
 
 1. A 3D circular center finding algorithm based on Conformal Algebra. We also provide a RANSAC variant so that it can handle  outliers.
 2. An exact 2D circular center finding algorithm that uses grid search. To solve the two-fold ambiguity problem, we give a feasible solution given two coplanar circles.
-3. We show in some automation and robotics application user cases that the proposed method can help users improve the accuracy.
+3. We show in some automation and robotics application user cases that the proposed method can help users improve accuracy.
 
 # Dependencies
 For the C++ version:
@@ -28,6 +28,9 @@ todo
 
 # Citation
 
+# Acknowlegement 
+[GRANSAC](https://github.com/drsrinathsridhar/GRANSAC/tree/master)
+[Ransaclib](https://github.com/tsattler/RansacLib/tree/master)
 
 # Contributors
 1. levinson (xiahaa)
