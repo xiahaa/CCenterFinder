@@ -27,7 +27,7 @@ if (OpenMP_FOUND)
     message(STATUS "found openmp")
     set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS}, ${OPENMP_C_FLAGS})
     set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}, ${OPENMP_CXX_FLAGS})
-else
+else()
     message(FATAL_ERROR "openmp not found")
 endif()
 
