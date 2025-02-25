@@ -1,7 +1,7 @@
 # TODO:
-1. find relevant data;~~
+1. ~~find relevant data;~~
 2. ~~finish C++ ransac version;~~
-3. add python version;
+3. ~~add python version;~~
 
 # CCenterFinder
 This repository contains our implementation on accurately localizing 3D and 2D circular centers, including:
@@ -13,8 +13,8 @@ This repository contains our implementation on accurately localizing 3D and 2D c
 # Dependencies
 For the C++ version:
 1. Eigen3
-2. OpenCV (optional)
-3. PCL (optional)
+2. OpenCV (REQUIRED for examples)
+3. PCL (REQUIRED for examples)
 
 For the Python version:
 1. NumPy
@@ -22,7 +22,12 @@ For the Python version:
 3. Matplotlib (optional)
 
 # Data
-todo
+To generate Monte-Carlo experimental data, change codes like `os.makedirs('/mnt/d/data/IROS/data/3d_experiment',exist_ok=True)` according to your folder structure, run
+```bash
+python main_carlo_pcl_3d.py 
+```
+todo: add argparser to specify output folder for generated data.
+
 
 # Usage
 
