@@ -12,7 +12,7 @@ find_package (Eigen3 REQUIRED)
 
 find_package (OpenCV REQUIRED)
 
-find_package (PCL optional)
+find_package (PCL REQUIRED)
 
 find_package (Glog REQUIRED)
 
@@ -23,6 +23,8 @@ if(MSVC)
   add_definitions(-D_USE_MATH_DEFINES)
 endif()
 
+find_package(Boost REQUIRED COMPONENTS filesystem)
+
 if (OpenMP_FOUND)
     message(STATUS "found openmp")
     set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS}, ${OPENMP_C_FLAGS})
@@ -32,12 +34,20 @@ else ()
 endif()
 
 
-include_directories (
-  ${CMAKE_SOURCE_DIR}/../include
-  ${EIGEN3_INCLUDE_DIRS}
-  ${OPENCV_INCLUDE_DIRS}
-  ${GLOG_INCLUDE_DIRS}
-)
+# Include PCL directories
+include_directories(
+    ${CMAKE_SOURCE_DIR}/../include
+    ${PCL_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIRS}
+    # ${GLOG_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
+    )
+link_directories(${PCL_LIBRARY_DIRS} ${OpenCV_LIBS})
+add_definitions(${PCL_DEFINITIONS})
 
 add_executable (demo src/main.cpp)
 target_link_libraries (demo ${OPENCV_LIBRARIES} ${GLOG_LIBRARIES})
+
+add_executable(benchmark3d benchmark_circle_fitting_noise.cpp)
+target_link_libraries(benchmark3d ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES})
