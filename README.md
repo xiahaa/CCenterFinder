@@ -21,6 +21,9 @@ For the Python version:
 2. OpenCV (optional)
 3. Matplotlib (optional)
 
+For RANSAC：
+1. we borrow template code from: https://github.com/mint-lab/rtl
+
 # Data
 To generate Monte-Carlo experimental data, change codes like `os.makedirs('/mnt/d/data/IROS/data/3d_experiment',exist_ok=True)` according to your folder structure, run
 ```bash
