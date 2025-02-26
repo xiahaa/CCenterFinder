@@ -1,8 +1,3 @@
-# TODO:
-1. ~~find relevant data;~~
-2. ~~finish C++ ransac version;~~
-3. ~~add python version;~~
-
 # CCenterFinder
 
 This repository contains our implementation for accurately localizing 3D and 2D circular centers, including:
