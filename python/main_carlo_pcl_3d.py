@@ -62,5 +62,52 @@ def simu_2():
             pbar.update(1)
             i+=1
 
+def simu_3():
+
+    def gen_data_span(span_angle, noise_level):
+        r=2+np.random.rand(1)*3
+        n=50
+        theta=np.linspace(0,np.pi*span_angle/180.0,n).squeeze()
+        p = np.vstack((r * np.cos(theta), r * np.sin(theta), np.zeros((1, n))))
+        R = np.eye(3)
+        dR = cv.Rodrigues(np.random.randn(3, 1))[0]
+        R = R @ dR
+        t = np.random.rand(3, 1) * 5
+        pc = R @ p + t
+        pcn = pc + np.random.randn(*pc.shape) * noise_level
+
+        centers=dict()
+        centers['pcl']=t.squeeze()
+        centers['lsq']=t.squeeze()
+        centers['real']=t.squeeze()
+        return (centers,pcn)
+
+    # simu 2
+    num_experiments=500
+    noise = 1e-1
+    span_angle = np.array([90, 135, 180, 225, 270, 315, 360])
+    # use tqdm
+    pbar=tqdm(total=num_experiments*len(span_angle))
+    for span in span_angle:
+        i=0
+        while i < num_experiments:
+            centers,pcn=gen_data_span(span, noise)
+            # write out pcn to a file, the output folder is /mnt/d/data/IROS/data/3d_experiment
+            import os
+            base_dir = '/mnt/d/data/IROS/data/3d_experiment_span'
+            os.makedirs(base_dir,exist_ok=True)
+            # write point line by line
+            # output file name is composed of noise level and experiment id
+            filename = os.path.join(base_dir, 'pcn_{:03d}_{:.6f}_{:04d}.txt'.format(span, noise, i))
+            with open(filename,'w') as f:
+                for j in range(pcn.shape[1]):
+                    f.write(f'{pcn[0,j]} {pcn[1,j]} {pcn[2,j]}\n')
+
+            # write out also the result to a file, line by line
+            filename = os.path.join(base_dir, 'centers_{:03d}_{:.6f}_{:04d}.txt'.format(span, noise, i))
+            np.savetxt(filename,np.array([centers['real'],centers['pcl'],centers['lsq']]))
+            pbar.update(1)
+            i+=1
+
 if __name__=='__main__':
-    simu_2()
+    simu_3()
