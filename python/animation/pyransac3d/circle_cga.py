@@ -139,13 +139,22 @@ class CircleCGA:
             pt_samples = pts[id_samples]
 
             center, radius, normal = lsq_fit_3d_circle(pt_samples, verbose=False)
+            normal = normal / np.linalg.norm(normal)
 
             vecC = normal
-            vecC_stakado = np.stack([vecC] * n_points, 0)
+            k = -np.sum(np.multiply(vecC, center))
+            plane_eq = [vecC[0], vecC[1], vecC[2], k]
 
+            # Distance from a point to the circle's plane
+            dist_pt_plane = (plane_eq[0]*pts[:,0]+plane_eq[1]*pts[:, 1]+plane_eq[2]*pts[:, 2]+plane_eq[3])/np.sqrt(plane_eq[0]**2+plane_eq[1]**2+plane_eq[2]**2)
+            vecC_stakado =  np.stack([vecC]*n_points,0)
             # Distance from a point to the circle hull if it is infinite along its axis (perpendicular distance to the plane)
-            dist_pt_inf_circle = np.cross(vecC_stakado, (center - pts))
+            dist_pt_inf_circle = np.cross(vecC_stakado, (center- pts))
             dist_pt_inf_circle = np.linalg.norm(dist_pt_inf_circle, axis=1) - radius
+
+            # https://math.stackexchange.com/questions/31049/distance-from-a-point-to-circles-closest-point
+            # The distance from a point to a circle will be the hipotenusa
+            dist_pt = np.sqrt(np.square(dist_pt_inf_circle)+np.square(dist_pt_plane))
 
             # https://math.stackexchange.com/questions/31049/distance-from-a-point-to-circles-closest-point
             # The distance from a point to a circle will be the hipotenusa
