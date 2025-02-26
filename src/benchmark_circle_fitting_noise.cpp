@@ -23,7 +23,6 @@
 
 int find_circle_pcl(pcl::PointCloud<pcl::PointXYZ> &cloud, Eigen::Vector3d &center, double &radius, double tolerance = 0.01, bool use_ransac = true, int max_iterations = 1000)
 {
-    // use pcl circle3d to find the circle
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::SACSegmentation<pcl::PointXYZ> seg;
@@ -44,7 +43,6 @@ int find_circle_pcl(pcl::PointCloud<pcl::PointXYZ> &cloud, Eigen::Vector3d &cent
     seg.setInputCloud(cloud.makeShared());
     seg.segment(*inliers, *coefficients);
 
-    // assign result
     center << coefficients->values[0], coefficients->values[1], coefficients->values[2];
     radius = coefficients->values[3];
 
@@ -58,13 +56,12 @@ int find_circle_cga(pcl::PointCloud<pcl::PointXYZ> &cloud, Eigen::Vector3d &cent
     {
         circle_points.push_back(cv::Point3d(point.x, point.y, point.z));
     }
-    // do circle fitting, find the center and radius, remove radius that is not correct.
+
     Eigen::Matrix<double, 3, 1> fit_center;
     double fit_radius;
 
     ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
 
-    // assign to center and radius
     center = fit_center;
     radius = fit_radius;
 
@@ -73,24 +70,21 @@ int find_circle_cga(pcl::PointCloud<pcl::PointXYZ> &cloud, Eigen::Vector3d &cent
 
 int read_pts(std::string filename, std::vector<cv::Point3d> &pts)
 {
-    // read from file
     std::ifstream infile;
     infile.open(filename);
     if (!infile.is_open())
     {
-        std::cerr << "Cannot open file: " << "/mnt/d/data/IROS/workspace/pcn.txt" << std::endl;
+        std::cerr << "Cannot open file: " << filename << std::endl;
         return -1;
     }
-    // read the file, file is composed of n lines, each line is x,y,z
-    std::string line;
 
+    std::string line;
     pts.clear();
     while (std::getline(infile, line))
     {
         std::istringstream iss(line);
         std::vector<double> data;
         std::string val;
-        // data are separated by comma parse it
         while (std::getline(iss, val, ' '))
         {
             data.push_back(std::stod(val));
@@ -114,13 +108,12 @@ int benchmark_noise()
 {
     std::string base_folder = "/mnt/d/data/IROS/data/3d_experiment/";
 
-    int num_experiments=500;
-    std::vector<double> noise_levels = {1e-4,1e-3,1e-2,1e-1,1};
+    int num_experiments = 500;
+    std::vector<double> noise_levels = {1e-4, 1e-3, 1e-2, 1e-1, 1};
 
     std::map<double, std::vector<double>> error_center_pcl_map;
     std::map<double, std::vector<double>> error_center_cga_map;
 
-    // make a tqdm like bar
     for (auto noise : noise_levels)
     {
         std::cout << "Noise: " << noise << std::endl;
@@ -136,7 +129,6 @@ int benchmark_noise()
             filename << base_folder << "pcn_" << std::fixed << std::setprecision(6) << noise << "_" << std::setw(4) << std::setfill('0') << i << ".txt";
 
             std::vector<cv::Point3d> circle_points;
-
             read_pts(filename.str(), circle_points);
 
             pcl::PointCloud<pcl::PointXYZ> cloud;
@@ -154,33 +146,21 @@ int benchmark_noise()
 
             Eigen::Matrix<double, 3, 1> fit_center;
             double fit_radius;
-
-            // ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
             find_circle_cga(cloud, fit_center, fit_radius, noise);
 
-            // std::cout << "center pcl: " << center_pcl.transpose() << " radius pcl: " << radius_pcl << std::endl;
-
-            // std::cout << "center cga: " << fit_center.transpose() << " radius cga: " << fit_radius << std::endl;
-
-            //# write out also the result to a file, line by line
             std::ostringstream result_filename;
             result_filename << base_folder << "centers_" << std::fixed << std::setprecision(6) << noise << "_" << std::setw(4) << std::setfill('0') << i << ".txt";
 
             std::vector<cv::Point3d> centers;
             read_pts(result_filename.str(), centers);
-            // std::cout << " Center GT: " << centers[0].x << " " << centers[0].y << " " << centers[0].z << std::endl;
-            // break;
 
-            // compute error of centers
             Eigen::Vector3d error_center_pcl = center_pcl - Eigen::Vector3d(centers[0].x, centers[0].y, centers[0].z);
             Eigen::Vector3d error_center_cga = fit_center - Eigen::Vector3d(centers[0].x, centers[0].y, centers[0].z);
 
             error_center_pcl_list.push_back(error_center_pcl.norm());
             error_center_cga_list.push_back(error_center_cga.norm());
         }
-        // break;
 
-        // compute mean error
         double mean_error_center_pcl = std::accumulate(error_center_pcl_list.begin(), error_center_pcl_list.end(), 0.0) / error_center_pcl_list.size();
         double mean_error_center_cga = std::accumulate(error_center_cga_list.begin(), error_center_cga_list.end(), 0.0) / error_center_cga_list.size();
 
@@ -197,13 +177,12 @@ int benchmark_span()
 {
     std::string base_folder = "/mnt/d/data/IROS/data/3d_experiment_span/";
 
-    int num_experiments=500;
+    int num_experiments = 500;
     double noise = 1e-1;
     std::vector<int> span_angle = {90, 135, 180, 225, 270, 315, 360};
     std::map<double, std::vector<double>> error_center_pcl_map;
     std::map<double, std::vector<double>> error_center_cga_map;
 
-    // make a tqdm like bar
     for (auto span : span_angle)
     {
         std::cout << "span: " << span << std::endl;
@@ -236,33 +215,21 @@ int benchmark_span()
 
             Eigen::Matrix<double, 3, 1> fit_center;
             double fit_radius;
-
-            // ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
             find_circle_cga(cloud, fit_center, fit_radius, noise);
 
-            // std::cout << "center pcl: " << center_pcl.transpose() << " radius pcl: " << radius_pcl << std::endl;
-
-            // std::cout << "center cga: " << fit_center.transpose() << " radius cga: " << fit_radius << std::endl;
-
-            //# write out also the result to a file, line by line
             std::ostringstream result_filename;
             result_filename << base_folder << "centers_" << std::setw(3) << std::setfill('0') << span << "_" << std::fixed << std::setprecision(6) << noise << "_" << std::setw(4) << std::setfill('0') << i << ".txt";
 
             std::vector<cv::Point3d> centers;
             read_pts(result_filename.str(), centers);
-            // std::cout << " Center GT: " << centers[0].x << " " << centers[0].y << " " << centers[0].z << std::endl;
-            // break;
 
-            // compute error of centers
             Eigen::Vector3d error_center_pcl = center_pcl - Eigen::Vector3d(centers[0].x, centers[0].y, centers[0].z);
             Eigen::Vector3d error_center_cga = fit_center - Eigen::Vector3d(centers[0].x, centers[0].y, centers[0].z);
 
             error_center_pcl_list.push_back(error_center_pcl.norm());
             error_center_cga_list.push_back(error_center_cga.norm());
         }
-        // break;
 
-        // compute mean error
         double mean_error_center_pcl = std::accumulate(error_center_pcl_list.begin(), error_center_pcl_list.end(), 0.0) / error_center_pcl_list.size();
         double mean_error_center_cga = std::accumulate(error_center_cga_list.begin(), error_center_cga_list.end(), 0.0) / error_center_cga_list.size();
 
