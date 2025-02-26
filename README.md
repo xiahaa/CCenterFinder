@@ -49,6 +49,12 @@ Generate data and run experiments:
 python python/main_carlo_pcl_3d.py --output_folder /path/to/output_folder
 ```
 
+### Demo
+
+Here is a demo of using the RANSAC algorithm with `circle_cga.py`:
+
+![Circle CGA RANSAC Demo](python/animation/pyransac3d/circle_cga.gif)
+
 ## Citation
 
 If you use this code, please cite our work.
@@ -58,6 +64,7 @@ If you use this code, please cite our work.
 We acknowledge the use of the following libraries:
 - [GRANSAC](https://github.com/drsrinathsridhar/GRANSAC/tree/master)
 - [Ransaclib](https://github.com/tsattler/RansacLib/tree/master)
+- [pyRANSAC-3D](https://github.com/leomariga/pyRANSAC-3D)
 
 ## Contributors
 1. levinson (xiahaa)
