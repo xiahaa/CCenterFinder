@@ -53,7 +53,7 @@ python python/main_carlo_pcl_3d.py --output_folder /path/to/output_folder
 
 Here is a demo of using the RANSAC algorithm with `circle_cga.py`:
 
-![Circle CGA RANSAC Demo](python/animation/pyransac3d/circle_cga.gif)
+![demo](https://raw.githubusercontent.com/xiahaa/CCenterFinder/blob/master/python/animation/pyransac3d/circle_cga.gif)
 
 ## Citation
 
