@@ -165,11 +165,97 @@ std::vector<cv::Point3d> generate_sparse_points(
     return points;
 }
 
+// Function to generate two-side symmetric arcs with non-uniform intervals
+std::vector<cv::Point3d> generate_symmetric_nonuniform_points(
+    const Eigen::Vector3d& center,
+    double radius,
+    const Eigen::Vector3d& normal,
+    int num_points = 20,
+    double arc_deg = 200.0,
+    double noise_std = 0.1,
+    int seed = 42
+) {
+    std::mt19937 rng(seed);
+    std::normal_distribution<double> noise_dist(0.0, noise_std);
+
+    // Orthonormal basis
+    Eigen::Vector3d n = normal.normalized();
+    Eigen::Vector3d u, v;
+    if (std::abs(n.z()) < 0.9) {
+        u = n.cross(Eigen::Vector3d(0, 0, 1));
+    } else {
+        u = n.cross(Eigen::Vector3d(1, 0, 0));
+    }
+    u.normalize();
+    v = n.cross(u);
+    v.normalize();
+
+    // Helper: build symmetric non-uniform arc around 0 with extent arc_rad
+    auto build_symmetric_arc = [&](double center_angle, double arc_rad, int count) {
+        std::vector<double> angles;
+        if (count <= 1) {
+            angles.push_back(center_angle);
+            return angles;
+        }
+
+        int half = count / 2;
+        // generate random positive intervals for half arc
+        std::vector<double> intervals(half, 0.0);
+        std::uniform_real_distribution<double> uni(0.8, 1.2);
+        double sum = 0.0;
+        for (int i = 0; i < half; ++i) { intervals[i] = uni(rng); sum += intervals[i]; }
+        for (int i = 0; i < half; ++i) { intervals[i] = intervals[i] / sum * (arc_rad / 2.0); }
+
+        // cumulative to get offsets
+        std::vector<double> t_half; t_half.reserve(half+1);
+        double acc = 0.0; t_half.push_back(0.0);
+        for (int i = 0; i < half; ++i) { acc += intervals[i]; t_half.push_back(acc); }
+
+        // mirror to get full set
+        // left side (negative), then right side (positive) excluding duplicate center
+        for (int i = static_cast<int>(t_half.size()) - 1; i >= 0; --i) {
+            angles.push_back(center_angle - t_half[i]);
+        }
+        for (size_t i = 1; i < t_half.size(); ++i) {
+            angles.push_back(center_angle + t_half[i]);
+        }
+
+        // if odd count, ensure exact count by trimming last
+        if (static_cast<int>(angles.size()) > count) {
+            angles.resize(count);
+        }
+        return angles;
+    };
+
+    double arc_rad = arc_deg * M_PI / 180.0;
+    // Build symmetric arc around 0
+    auto angles = build_symmetric_arc(0.0, arc_rad, num_points);
+
+    // Map to [0, 2pi)
+    for (auto &ang : angles) {
+        ang = std::fmod(ang, 2.0 * M_PI);
+        if (ang < 0) ang += 2.0 * M_PI;
+    }
+
+    // Create points
+    std::vector<cv::Point3d> points;
+    points.reserve(angles.size());
+    for (double t : angles) {
+        Eigen::Vector3d point = center + radius * (std::cos(t) * u + std::sin(t) * v);
+        point.x() += noise_dist(rng);
+        point.y() += noise_dist(rng);
+        point.z() += noise_dist(rng);
+        points.emplace_back(point.x(), point.y(), point.z());
+    }
+
+    return points;
+}
+
 // PCL circle fitting function
 bool fit_circle_pcl(const std::vector<cv::Point3d>& points,
                    Eigen::Vector3d& center,
                    double& radius,
-                   double distance_threshold = 0.01) {
+                   double distance_threshold = 0.1) {
     // Convert to PCL point cloud
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -361,6 +447,12 @@ int main(int argc, char* argv[]) {
         return generate_sparse_points(center, radius, normal, 12, 0.2, seed);
     };
     run_monte_carlo_experiment("sparse_points", scenario3, num_experiments, 42, output_dir);
+
+    // Scenario 4: Symmetric distribution with non-uniform intervals
+    auto scenario4 = [](const Eigen::Vector3d& center, double radius, const Eigen::Vector3d& normal, int seed) {
+        return generate_symmetric_nonuniform_points(center, radius, normal, 20, 200.0, 0.2, seed);
+    };
+    run_monte_carlo_experiment("symmetric_distribution", scenario4, num_experiments, 42, output_dir);
 
     std::cout << "Monte Carlo experiments completed!" << std::endl;
     std::cout << "Results saved to: " << output_dir << std::endl;

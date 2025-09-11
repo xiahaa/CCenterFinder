@@ -104,7 +104,7 @@ def plot_bar_charts(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
     scenarios = list(results.keys())
     methods = ['pcl', 'cga']
     method_labels = ['PCL', 'CGA']
-    colors = ['#e74c3c', '#f8c471']
+    colors = ['#85c1e9', '#f9e79f']  # light blue, light yellow
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
@@ -127,14 +127,13 @@ def plot_bar_charts(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
                 stds.append(0)
 
         ax1.bar(x + i * width, means, width, label=label, color=color, alpha=0.8,
-                yerr=stds, capsize=5)
+                yerr=None, capsize=5)
 
-    ax1.set_xlabel('Scenario')
     ax1.set_ylabel('Center Error')
     ax1.set_title('Center Error Comparison')
     ax1.set_xticks(x + width)
     ax1.set_xticklabels(scenarios, rotation=45, ha='right')
-    ax1.legend()
+    # ax1.legend()
     ax1.grid(True, alpha=0.3)
 
     # Radius error plot
@@ -154,9 +153,8 @@ def plot_bar_charts(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
                 stds.append(0)
 
         ax2.bar(x + i * width, means, width, label=label, color=color, alpha=0.8,
-                yerr=stds, capsize=5)
+                yerr=None, capsize=5)
 
-    ax2.set_xlabel('Scenario')
     ax2.set_ylabel('Radius Error')
     ax2.set_title('Radius Error Comparison')
     ax2.set_xticks(x + width)
@@ -167,142 +165,6 @@ def plot_bar_charts(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'bar_charts.png'), dpi=200, bbox_inches='tight')
     plt.show()
-
-def plot_box_plots(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
-    """Create box plots for detailed error distribution analysis."""
-    scenarios = list(results.keys())
-    methods = ['pcl', 'cga']
-    method_labels = ['PCL', 'CGA']
-    colors = ['#e74c3c', '#f8c471']
-
-    fig, axes = plt.subplots(2, len(scenarios), figsize=(4 * len(scenarios), 8))
-    if len(scenarios) == 1:
-        axes = axes.reshape(2, 1)
-
-    for i, scenario in enumerate(scenarios):
-        # Center error box plot
-        ax1 = axes[0, i]
-        data_to_plot = []
-        labels = []
-
-        for method, label, color in zip(methods, method_labels, colors):
-            if method in results[scenario]:
-                data = results[scenario][method]
-                success_mask = data[:, 2] == 1
-                successful_data = data[success_mask]
-
-                if len(successful_data) > 0:
-                    data_to_plot.append(successful_data[:, 0])  # center errors
-                    labels.append(label)
-
-        if data_to_plot:
-            bp1 = ax1.boxplot(data_to_plot, labels=labels, patch_artist=True)
-            for patch, color in zip(bp1['boxes'], colors[:len(data_to_plot)]):
-                patch.set_facecolor(color)
-                patch.set_alpha(0.7)
-
-        ax1.set_title(f'{scenario.replace("_", " ").title()}\nCenter Error')
-        ax1.set_ylabel('Center Error')
-        ax1.grid(True, alpha=0.3)
-
-        # Radius error box plot
-        ax2 = axes[1, i]
-        data_to_plot = []
-        labels = []
-
-        for method, label, color in zip(methods, method_labels, colors):
-            if method in results[scenario]:
-                data = results[scenario][method]
-                success_mask = data[:, 2] == 1
-                successful_data = data[success_mask]
-
-                if len(successful_data) > 0:
-                    data_to_plot.append(successful_data[:, 1])  # radius errors
-                    labels.append(label)
-
-        if data_to_plot:
-            bp2 = ax2.boxplot(data_to_plot, labels=labels, patch_artist=True)
-            for patch, color in zip(bp2['boxes'], colors[:len(data_to_plot)]):
-                patch.set_facecolor(color)
-                patch.set_alpha(0.7)
-
-        ax2.set_title(f'{scenario.replace("_", " ").title()}\nRadius Error')
-        ax2.set_ylabel('Radius Error')
-        ax2.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'box_plots.png'), dpi=200, bbox_inches='tight')
-    plt.show()
-
-def plot_success_rates(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
-    """Create bar chart showing success rates for each method and scenario."""
-    scenarios = list(results.keys())
-    methods = ['pcl', 'cga']
-    method_labels = ['PCL', 'CGA']
-    colors = ['#e74c3c', '#f8c471']
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    x = np.arange(len(scenarios))
-    width = 0.25
-
-    for i, (method, label, color) in enumerate(zip(methods, method_labels, colors)):
-        success_rates = []
-
-        for scenario in scenarios:
-            if method in results[scenario]:
-                stats = compute_statistics(results[scenario][method])
-                success_rates.append(stats['success_rate'])
-            else:
-                success_rates.append(0)
-
-        ax.bar(x + i * width, success_rates, width, label=label, color=color, alpha=0.8)
-
-    ax.set_xlabel('Scenario')
-    ax.set_ylabel('Success Rate')
-    ax.set_title('Success Rate Comparison')
-    ax.set_xticks(x + width)
-    ax.set_xticklabels(scenarios, rotation=45, ha='right')
-    ax.set_ylim(0, 1)
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-    # Add percentage labels on bars
-    for i, (method, label) in enumerate(zip(methods, method_labels)):
-        for j, scenario in enumerate(scenarios):
-            if method in results[scenario]:
-                stats = compute_statistics(results[scenario][method])
-                height = stats['success_rate']
-                ax.text(x[j] + i * width, height + 0.01, f'{height:.2f}',
-                       ha='center', va='bottom', fontsize=9)
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'success_rates.png'), dpi=200, bbox_inches='tight')
-    plt.show()
-
-def print_statistics(results: Dict[str, Dict[str, np.ndarray]]):
-    """Print detailed statistics for all methods and scenarios."""
-    print("\n" + "="*80)
-    print("DETAILED STATISTICS")
-    print("="*80)
-
-    scenarios = list(results.keys())
-    methods = ['pcl', 'cga']
-    method_labels = ['PCL', 'CGA']
-
-    for scenario in scenarios:
-        print(f"\nScenario: {scenario.replace('_', ' ').title()}")
-        print("-" * 50)
-
-        for method, label in zip(methods, method_labels):
-            if method in results[scenario]:
-                stats = compute_statistics(results[scenario][method])
-                print(f"{label:>10}: Success={stats['success_rate']:.3f} "
-                      f"({stats['num_successful']}/{stats['num_total']}) | "
-                      f"Center Error: {stats['mean_center_error']:.4f}±{stats['std_center_error']:.4f} | "
-                      f"Radius Error: {stats['mean_radius_error']:.4f}±{stats['std_radius_error']:.4f}")
-            else:
-                print(f"{label:>10}: No data available")
 
 def main():
     """Main function to analyze C++ benchmark results."""
@@ -329,20 +191,13 @@ def main():
 
     print(f"Loaded results for {len(results)} scenarios")
 
-    # Print statistics
-    print_statistics(results)
-
     # Create visualizations
     print("\nCreating visualizations...")
     plot_bar_charts(results, args.output_dir)
-    plot_box_plots(results, args.output_dir)
-    plot_success_rates(results, args.output_dir)
 
     print(f"\nAnalysis complete! Results saved to: {args.output_dir}")
     print("Generated files:")
     print("  - bar_charts.png: Mean error comparison")
-    print("  - box_plots.png: Error distribution analysis")
-    print("  - success_rates.png: Success rate comparison")
 
 if __name__ == "__main__":
     main()
