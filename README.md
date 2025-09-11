@@ -1,68 +1,126 @@
 # CCenterFinder
 
-This repository contains our implementation for accurately localizing 3D and 2D circular centers, including:
+Accurate localization of 3D and 2D circle centers.
 
-1. A 3D circular center finding algorithm based on Conformal Algebra. We also provide a RANSAC variant to handle outliers.
-2. An exact 2D circular center finding algorithm that uses grid search. To solve the two-fold ambiguity problem, we provide a feasible solution given two coplanar circles.
-3. Demonstrations in automation and robotics applications showing how the proposed method can help improve accuracy.
+- 3D circle fitting via Conformal Geometric Algebra (CGA)
+- Robust CGA (normalization + stable eigen selection) and RANSAC baselines
+- PCL Circle3D (RANSAC) baseline for comparison
+- 2D exact circle center via search (for reference)
 
 ## Dependencies
 
-### For the C++ version:
-1. Eigen3
-2. OpenCV (REQUIRED for examples)
-3. PCL (REQUIRED for examples)
+### C++
+- Eigen3
+- OpenCV (examples/IO)
+- PCL (PCL RANSAC baseline)
 
-### For the Python version:
-1. NumPy
-2. OpenCV (optional)
-3. Matplotlib (optional)
+### Python (optional, analysis/demos)
+- NumPy, Matplotlib, OpenCV
 
-### For RANSAC:
-We borrow template code from: [GRANSAC](https://github.com/drsrinathsridhar/GRANSAC/tree/master) and [Ransaclib](https://github.com/tsattler/RansacLib/tree/master)
+### RANSAC templates
+Code in `include/rtl/` adapted from: [GRANSAC](https://github.com/drsrinathsridhar/GRANSAC) and [RansacLib](https://github.com/tsattler/RansacLib)
 
-## Data
+## Build (CMake)
 
-To generate Monte-Carlo experimental data, modify the code to match your folder structure, e.g., `os.makedirs('/mnt/d/data/IROS/data/3d_experiment', exist_ok=True)`, and run:
-```bash
-python main_carlo_pcl_3d.py --output_folder /path/to/output_folder
+### Windows (PowerShell)
+```powershell
+cd D:\data\CCenterFinder
+mkdir build; cd build
+cmake -G "Visual Studio 17 2022" -A x64 ..
+cmake --build . --config Release
 ```
 
-## Usage
-
-### Running the C++ version
-Compile and run the benchmark:
+### Linux
 ```bash
-g++ -o benchmark_circle_fitting_noise src/benchmark_circle_fitting_noise.cpp -I/path/to/eigen -I/path/to/opencv -I/path/to/pcl -L/path/to/libs -lopencv_core -lopencv_imgproc -lopencv_highgui -lpcl_common -lpcl_io -lpcl_segmentation
-./benchmark_circle_fitting_noise [benchmark_choice]
-```
-`benchmark_choice` can be `0` for noise benchmark or `1` for span benchmark.
-
-### Running the Python version
-Generate data and run experiments:
-```bash
-python python/main_carlo_pcl_3d.py --output_folder /path/to/output_folder
+cd /path/to/CCenterFinder
+mkdir build && cd build
+cmake ..
+make -j
 ```
 
-### Demo
+## Executables
 
-Here is a demo of using the RANSAC algorithm with `circle_cga.py`:
+- `monte_carlo_benchmark`: Monte Carlo comparison across scenarios (noise, arcs, sparsity, symmetric non-uniform)
+- `benchmark_circle_fitting_noise`: simple noise benchmark
+- `benchmark_outlier`: outlier-robustness benchmark (CGA vs PCL)
+- `test_fit3d`: quick sanity check (original vs robust CGA on synthetic data)
 
-![demo](https://raw.githubusercontent.com/xiahaa/CCenterFinder/blob/master/python/animation/pyransac3d/circle_cga.gif)
+Build targets (after configure):
+```powershell
+cmake --build build --config Release --target monte_carlo_benchmark
+cmake --build build --config Release --target benchmark_outlier
+cmake --build build --config Release --target test_fit3d
+```
 
-## Citation
+## How we compute fits
 
-If you use this code, please cite our work.
+### Original CGA (C++)
+`include/Fit3DCircle.hpp` implements the baseline CGA method (no pre-normalization).
+
+### Robust CGA (C++)
+`include/RobustFit3DCircle.hpp` improves numerical stability:
+- Center points and scale so RMS ≈ √2 before forming the CGA system
+- Select two smallest positive eigenvalues; fallback to two smallest
+- Recover circle parameters; then unscale and uncenter outputs
+
+Use:
+```cpp
+Eigen::Vector3d center; double radius; Eigen::Vector3d normal;
+robust_cga::RobustFit3DCircle::Fit(points, center, radius, &normal);
+```
+
+## Outlier benchmark
+
+- Source: `src/benchmark_outlier.cpp`
+- CGA path uses RANSAC (`include/rtl`) with an estimator powered by Robust CGA, then refits on inliers.
+- PCL path uses `pcl::SACSegmentation<pcl::PointXYZ>` with `SACMODEL_CIRCLE3D`.
+
+Run (example):
+```powershell
+cmake --build build --config Release --target benchmark_outlier
+.\n+build\Release\benchmark_outlier.exe
+```
+
+Tips:
+- Tune RANSAC thresholds (`find_circle_cga` uses tolerance ~0.1–0.2) based on your data scale.
+- Increase iterations for high outlier ratios.
+
+## Monte Carlo benchmark
+
+Source: `src/monte_carlo_benchmark.cpp`
+
+Runs 4 scenarios (isotropic noise; limited arcs; sparse non-uniform; symmetric non-uniform). Outputs per-scenario text results for analysis.
+
+Run:
+```powershell
+cmake --build build --config Release --target monte_carlo_benchmark
+build\Release\monte_carlo_benchmark.exe 1000 results
+```
+
+## Quick test
+
+`src/test_fit3d` prints original vs robust CGA center/radius errors on synthetic data.
+
+```powershell
+cmake --build build --config Release --target test_fit3d
+build\Release\test_fit3d.exe
+```
+
+## Python demos (optional)
+
+Some utilities live under `python/`. Install basics:
+```bash
+pip install numpy matplotlib opencv-python
+```
 
 ## Acknowledgement
 
-We acknowledge the use of the following libraries:
-- [GRANSAC](https://github.com/drsrinathsridhar/GRANSAC/tree/master)
-- [Ransaclib](https://github.com/tsattler/RansacLib/tree/master)
+- [GRANSAC](https://github.com/drsrinathsridhar/GRANSAC)
+- [RansacLib](https://github.com/tsattler/RansacLib)
 - [pyRANSAC-3D](https://github.com/leomariga/pyRANSAC-3D)
 
 ## Reference
-- [decouple solution of 3D circle fitting](https://meshlogic.github.io/posts/jupyter/curve-fitting/fitting-a-circle-to-cluster-of-3d-points/)
+- [Decoupled solution of 3D circle fitting](https://meshlogic.github.io/posts/jupyter/curve-fitting/fitting-a-circle-to-cluster-of-3d-points/)
 
 ## Contributors
 1. levinson (xiahaa)
