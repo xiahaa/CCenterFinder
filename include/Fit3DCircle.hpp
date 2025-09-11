@@ -11,7 +11,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <glog/logging.h>
+// #include <glog/logging.h>
 #include <Eigen/Eigenvalues>
 #include <Eigen/Dense>
 #include <Eigen/Core>

@@ -14,7 +14,8 @@ find_package (OpenCV REQUIRED)
 
 find_package (PCL REQUIRED)
 
-find_package (Glog REQUIRED)
+## glog disabled
+## find_package (Glog REQUIRED)
 
 find_package (OpenMP REQUIRED)
 
@@ -33,13 +34,14 @@ else ()
     message(FATAL_ERROR "openmp not found")
 endif()
 
+## glog disabled
+## add_compile_definitions(GLOG_USE_GLOG_EXPORT)
 
 # Include PCL directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
     ${PCL_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIRS}
-    ${GLOG_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
     )
@@ -51,3 +53,6 @@ add_definitions(${PCL_DEFINITIONS})
 
 add_executable(benchmark3d src/benchmark_circle_fitting_noise.cpp)
 target_link_libraries(benchmark3d ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES})
+
+add_executable(monte_carlo_benchmark src/monte_carlo_benchmark.cpp)
+target_link_libraries(monte_carlo_benchmark ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES})
