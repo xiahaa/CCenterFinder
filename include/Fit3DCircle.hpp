@@ -19,7 +19,7 @@
 class ConformalFit3DCicle{
 private:
     ConformalFit3DCicle() = default;
-    
+
 public:
     template <typename Derived>
     static int Skew(const Eigen::Matrix<typename Derived::Scalar, 3, 1> &x, Eigen::MatrixBase<Derived> &xhat)
@@ -29,7 +29,7 @@ public:
                -x[1], x[0],     0;
         return 0;
     }
-    
+
     template <typename Derived>
     static int OuterProduct(const Eigen::MatrixBase<Derived> &y,
                             const Eigen::MatrixBase<Derived> &x,
@@ -52,8 +52,8 @@ public:
         val = A*x;
         return 0;
     }
-    
-    
+
+
     template <typename T, typename Derived>
     static int EstablishPmat(const std::vector<T> &pcd, Eigen::MatrixBase<Derived> &Pmat)
     {
@@ -68,16 +68,16 @@ public:
             Scalar_t vnorm = v.norm();
             Scalar_t vnorm2 = vnorm*vnorm;
             Scalar_t vnorm4 = vnorm2*vnorm2;
-            
+
             DDt.template block<3,3>(0, 0) = DDt.template block<3,3>(0, 0) + v * v.transpose();
             DDt.template block<3,1>(0, 3) = DDt.template block<3,1>(0, 3) -0.5 * vnorm2 * v;
             DDt.template block<3,1>(0, 4) = DDt.template block<3,1>(0, 4) -v;
-            
+
             DDt.template block<1,3>(3, 0) = DDt.template block<1,3>(3, 0) + v.transpose();
-            
+
             DDt(3, 3) = DDt(3, 3) - 0.5 * vnorm2;
             DDt(3, 4) = DDt(3, 4) - 1;
-            
+
             DDt.template block<1, 3>(4, 0) = DDt.template block<1,3>(4, 0) + 0.5 * vnorm2 * v.transpose();
             DDt(4, 3) = DDt(4, 3) -0.25 * vnorm4;
             DDt(4, 4) = DDt(4, 4) -0.5 * vnorm2;
@@ -85,7 +85,7 @@ public:
         Pmat = DDt / n;
         return 0;
     }
-    
+
     template <typename Derived>
     static int ExtractGeometricParameters(const Eigen::Matrix<typename Derived::Scalar, 10, 1> &e,
                                           Eigen::MatrixBase<Derived> &c,
@@ -101,7 +101,7 @@ public:
         auto n = -eoi;
         auto B0 = eoinf;
         auto B1 = ei[0], B2 = ei[1], B3 = ei[2];
-                
+
         Eigen::Matrix<Scalar_t, 3, 3> A;
         A.row(0) << B0,-B3,B2;
         A.row(1) << B3, B0,-B1;
@@ -114,7 +114,7 @@ public:
             radius = 0;
         return 0;
     }
-    
+
     template <typename T, typename Derived>
     static int Fit(const std::vector<T> &ps, Eigen::MatrixBase<Derived> &center, typename Derived::Scalar &radius)
     {
@@ -138,12 +138,12 @@ public:
         Eigen::Matrix<Scalar_t, 5, 1> sol2 = eigSolver.eigenvectors().col(index2).real();
         Eigen::Matrix<Scalar_t, 5, 1> sol1 = eigSolver.eigenvectors().col(index1).real();
         Eigen::Matrix<Scalar_t, 10, 1> sol_final;
-        
+
         OuterProduct(sol2, sol1, sol_final);
         ExtractGeometricParameters(sol_final, center, radius);
         return 0;
     }
-    
+
     // todo, add ransac
 
 };
