@@ -7,9 +7,9 @@ def skew(x):
     return xx
 
 def outer_product(y,x):
-    if y.shape is not (5,1):
+    if y.shape != (5,1):
         y = y.reshape((5,1))
-    if x.shape is not (5,1):
+    if x.shape != (5,1):
         x = x.reshape((5,1))
 
     yx=skew(y[:3,0])
@@ -42,7 +42,7 @@ def construct_p_from_batch(ps):
     return P2
 
 def construct_a_single_p(p):
-    if p.shape is not (3,1):
+    if p.shape != (3,1):
         p = p.reshape((3,1))
     P=np.zeros((5,5))
     P[:3,:3]=p@p.T
@@ -59,7 +59,7 @@ def construct_a_single_p(p):
     return P
 
 def recover_circle_parameter(e,verbose=False):
-    if e.shape is not (10,):
+    if e.shape != (10,):
         e=e.squeeze()
     ei=e[:3]
     eoi=e[3:6]
@@ -106,5 +106,3 @@ def lsq_fit_3d_circle(points, verbose=False):
 
 if __name__=='__main__':
     pass
-
-
