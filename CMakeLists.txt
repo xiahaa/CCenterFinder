@@ -56,3 +56,6 @@ target_link_libraries(benchmark3d ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRAR
 
 add_executable(monte_carlo_benchmark src/monte_carlo_benchmark.cpp)
 target_link_libraries(monte_carlo_benchmark ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES})
+
+add_executable(benchmark_outlier src/benchmark_outlier.cpp)
+target_link_libraries(benchmark_outlier ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES})
