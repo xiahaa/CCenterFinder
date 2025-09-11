@@ -61,6 +61,9 @@ We acknowledge the use of the following libraries:
 - [Ransaclib](https://github.com/tsattler/RansacLib/tree/master)
 - [pyRANSAC-3D](https://github.com/leomariga/pyRANSAC-3D)
 
+## Reference
+- [decouple solution of 3D circle fitting](https://meshlogic.github.io/posts/jupyter/curve-fitting/fitting-a-circle-to-cluster-of-3d-points/)
+
 ## Contributors
 1. levinson (xiahaa)
 2. jun (jjj)
