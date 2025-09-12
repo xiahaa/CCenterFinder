@@ -113,13 +113,13 @@ def get_center_with_grid_search_cached(outer, centers, K, marker_diameter, N=4, 
         scores = np.array(scores)
 
     # Sort by cost (ascending) to find minima
-    ids = np.argsort(scores)
+    # ids = np.argsort(scores)
 
     # Return top 2 candidates as potential local minima
-    minimums = centers[ids[:2], :]
-    best_scores = scores[ids[:2]]
+    # minimums = centers[ids[:2], :]
+    # best_scores = scores[ids[:2]]
 
-    return centers, best_scores
+    return centers, scores
 
 def get_center_with_grid_search(outer, centers, K, marker_diameter):
     fs = []
@@ -127,11 +127,45 @@ def get_center_with_grid_search(outer, centers, K, marker_diameter):
         fc = eval_distance_f0(outer, c, K, marker_diameter)
         fs.append(fc)
 
-    fs = np.asarray(fs)
-    ids = np.argsort(fs)
-    minimums = centers[ids[:2],:]
-    scores = fs[ids[:2]]
+    scores = np.asarray(fs)
+    # ids = np.argsort(fs)
+    # minimums = centers[ids[:2],:]
+    # scores = fs[ids[:2]]
     return centers, scores
+
+def select_minima_with_suppression(centers, scores, k=2, suppress_radius=15):
+    """
+    Select up to k minima with non-maximum suppression to avoid nearby picks.
+
+    Args:
+        centers: Candidate centers as array of shape (N, 2)
+        scores: Cost values for each center, lower is better (shape (N,))
+        k: Number of minima to select
+        suppress_radius: Minimum Euclidean distance (in pixels) between picks
+
+    Returns:
+        List of selected centers (each shape (2,)) in order of increasing score
+    """
+    if centers is None or len(centers) == 0:
+        return []
+    scores = np.asarray(scores).reshape(-1)
+    order = np.argsort(scores)
+    selected = []
+    for idx in order:
+        c = centers[idx]
+        if not np.isfinite(scores[idx]):
+            continue
+        too_close = False
+        for s in selected:
+            if np.hypot(c[0] - s[0], c[1] - s[1]) < suppress_radius:
+                too_close = True
+                break
+        if too_close:
+            continue
+        selected.append(c)
+        if len(selected) >= k:
+            break
+    return selected
 
 def generate_points(r):
     theta = np.linspace(0,np.pi*2,200)
@@ -238,8 +272,14 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
 
         centers=np.vstack((u_nz,v_nz)).T
 
-        # ideally, we have two local minimum
-        minimums, scores=get_center_with_grid_search(poly,centers,K,2*radius)
+        # ideally, we have two local minima; compute scores then select with suppression
+        all_centers, all_scores = get_center_with_grid_search(poly, centers, K, 2*radius)
+        picked = select_minima_with_suppression(all_centers, all_scores, k=2, suppress_radius=15)
+        # Fallback if suppression returns less than 2
+        if len(picked) < 2:
+            ids = np.argsort(np.asarray(all_scores).reshape(-1))[:2]
+            picked = [all_centers[i] for i in ids]
+        minimums = np.vstack(picked)
 
         # Sort minima by distance to projected circular center (closest first)
         dists = np.sum((minimums - np.array([uv_circular_center[0,0], uv_circular_center[1,0]]))**2, axis=1)
@@ -261,12 +301,20 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
             })
             # Use a screen-friendly DPI; keep high DPI only for saving
             fig, axes = plt.subplots(1, 2, figsize=(12, 5.5), dpi=120)
+            fig.subplots_adjust(wspace=0.05)
             # Set light gray figure background
             fig.patch.set_facecolor('#eeeeee')
             ax0, ax1 = axes
             # Set light gray axes backgrounds
             ax0.set_facecolor('#f5f5f5')
             ax1.set_facecolor('#f5f5f5')
+
+            # Compute a zoomed view window around the fitted ellipse
+            zoom_scale = 1.8  # increase to zoom out, decrease to zoom in
+            xmin = max(0, ex - zoom_scale * ea)
+            xmax = min(1280, ex + zoom_scale * ea)
+            ymin = max(0, ey - zoom_scale * eb)
+            ymax = min(960, ey + zoom_scale * eb)
 
             # Left panel
             # Render mask with 0-valued background as light gray instead of black
@@ -277,12 +325,10 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
             ax0.scatter(uv[0,:], uv[1,:], s=6, c='#1f77b4', alpha=0.5, edgecolors='none', label='Input Points')
             ax0.plot(ep[0, :], ep[1, :], color='#00bfa6', linewidth=2, label='Fitted Ellipse')
             ax0.scatter([ex], [ey], s=70, facecolors='none', edgecolors='#ffcc00', linewidths=2, label='Ellipse Center')
-            ax0.scatter([uv_circular_center[0, 0]], [uv_circular_center[1, 0]], s=70, marker='x', color='#e41a1c', linewidths=2, label='Projected Circular Center')
+            ax0.scatter([uv_circular_center[0, 0]], [uv_circular_center[1, 0]], s=140, marker='x', color='#e41a1c', linewidths=2, label='Projected Circular Center')
             ax0.scatter([mmcx], [mmcy], s=60, marker='D', color='#984ea3', edgecolors='white', linewidths=0.8, label='Center of Mass')
-            # ax0.plot(found_mc[0], found_mc[1], 'g*', markersize=10, label='min center 1')
-            # ax0.plot(another_mc[0], another_mc[1], 'g^', markersize=8, label='min center 2')
-            ax0.set_xlim(0, 1280)
-            ax0.set_ylim(0, 960)
+            ax0.set_xlim(xmin, xmax)
+            ax0.set_ylim(ymin, ymax)
             ax0.set_aspect('equal')
             ax0.set_xticks([]); ax0.set_yticks([])
             # Defer legend to figure-level legend below
@@ -310,10 +356,12 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
             X, Y = np.meshgrid(np.linspace(0, 1280, W), np.linspace(0, 960, H))
             ax1.contour(X, Y, valid_cost, levels=10, colors='white', linewidths=0.6, alpha=0.8)
             ax1.scatter([ex], [ey], s=50, facecolors='none', edgecolors='#ffcc00', linewidths=1.8, label='Ellipse Center')
-            ax1.scatter([uv_circular_center[0, 0]], [uv_circular_center[1, 0]], s=55, marker='x', color='#e41a1c', linewidths=1.8, label='Projected Circular Center')
+            ax1.scatter([uv_circular_center[0, 0]], [uv_circular_center[1, 0]], s=140, marker='x', color='#e41a1c', linewidths=1.8, label='Projected Circular Center')
             ax1.scatter([mmcx], [mmcy], s=50, marker='D', color='#984ea3', edgecolors='white', linewidths=0.8, label='Center of Mass')
-            ax1.set_xlim(0, 1280)
-            ax1.set_ylim(0, 960)
+            ax1.plot(found_mc[0], found_mc[1], 'g*', markersize=10, label='local minimum 1')
+            ax1.plot(another_mc[0], another_mc[1], 'g^', markersize=8, label='local minimum 2')
+            ax1.set_xlim(xmin, xmax)
+            ax1.set_ylim(ymin, ymax)
             ax1.set_aspect('equal')
             ax1.set_xticks([]); ax1.set_yticks([])
             ax1.set_title('Score Map (Scaled Ellipse)')
@@ -340,7 +388,9 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
                 'Fitted Ellipse': 'Ellipse',
                 'Ellipse Center': 'Ellipse Ctr',
                 'Projected Circular Center': 'Proj Ctr',
-                'Center of Mass': 'Mass Ctr'
+                'Center of Mass': 'Mass Ctr',
+                'local minimum 1': 'Local Min 1',
+                'local minimum 2': 'Local Min 2'
             }
             labels_short = [label_map.get(l, l) for l in labels]
             # Set columns equal to number of entries to keep legend in one row
@@ -348,10 +398,10 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
             fig.legend(handles, labels_short,
                        loc='lower center', ncol=ncols, frameon=True, framealpha=0.95,
                        bbox_to_anchor=(0.5, -0.02), fancybox=True, borderpad=0.8,
-                       handlelength=2.2, handletextpad=0.8, labelspacing=0.6)
+                       handlelength=2.2, handletextpad=0.8, labelspacing=0.3)
 
             # Leave space at bottom for the figure legend
-            plt.tight_layout(rect=[0, 0.10, 1, 1], pad=1.0)
+            plt.tight_layout(rect=[0, 0.10, 1, 1], pad=0.6)
             # Save figure to result folder (export at high DPI)
             os.makedirs('result', exist_ok=True)
             out_path = os.path.join('result', 'ellipse_score.png')
