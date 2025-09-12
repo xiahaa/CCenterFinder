@@ -1,9 +1,14 @@
 //
-//  main.cpp
+//  simple_test.cpp
 //  fit3dcicle
 //
 //  Created by xiao.hu on 2023/8/9.
 //  Copyright © 2023 xiao.hu. All rights reserved.
+//
+//  Unified test program for 3D circle fitting with multiple modes:
+//  - Generated: Create synthetic circle data
+//  - Given: Use provided test data
+//  - RANSAC: Use RANSAC with noise and outliers for robust fitting
 //
 
 #include <iostream>
@@ -12,29 +17,191 @@
 #include <Eigen/Core>
 #include <opencv2/core.hpp>
 #include "timer.hpp"
+#include <cmath>
+#include <random>
+#include <cstdint>
+#include "rtl/RTL.hpp"
+#include "RobustFit3DCircle.hpp"
 
+/**
+ * @brief Simple 3D point class for RANSAC operations
+ *
+ * This class represents a 3D point with x, y, z coordinates.
+ * Used as the data type for RANSAC circle fitting.
+ */
+class Point3
+{
+public:
+    // Default constructor - initializes to origin
+    Point3() : x_(0), y_(0), z_(0) { }
 
+    // Constructor with explicit coordinates
+    Point3(double _x, double _y, double _z) : x_(_x), y_(_y), z_(_z) { }
+
+    // Stream output operator for debugging
+    friend std::ostream& operator<<(std::ostream& out, const Point3& p) {
+        return out << p.x_ << ", " << p.y_ << ", " << p.z_;
+    }
+
+    // 3D coordinates
+    double x_, y_, z_;
+};
+
+/**
+ * @brief 3D circle model class for RANSAC fitting
+ *
+ * Represents a 3D circle with center, radius, and normal vector.
+ * The normal vector defines the plane in which the circle lies.
+ */
+class Circle3D
+{
+public:
+    // Default constructor
+    Circle3D(){ }
+
+    // Constructor with explicit parameters
+    Circle3D(double cx, double cy, double cz, double radius, double nx, double ny, double nz){
+        center_ << cx, cy, cz;
+        radius_ = radius;
+        normal_ << nx, ny, nz;
+     }
+
+    // Stream output operator for debugging
+    friend std::ostream& operator<<(std::ostream& out, const Circle3D& c) {
+        return out << c.center_.transpose() << ", " << c.radius_ << ", " << c.normal_.transpose();
+    }
+
+    // Circle parameters
+    double radius_;                                    // Circle radius
+    Eigen::Matrix<double, 3, 1> center_;              // Circle center point
+    Eigen::Matrix<double, 3, 1> normal_;              // Normal vector of the circle's plane
+};
+
+/**
+ * @brief RANSAC estimator for 3D circle fitting
+ *
+ * Implements the RTL::Estimator interface for fitting 3D circles using RANSAC.
+ * Uses robust conformal geometric algebra (CGA) fitting for model computation.
+ */
+class Circle3DEstimator : public RTL::Estimator<Circle3D, Point3, std::vector<Point3> >
+{
+public:
+    /**
+     * @brief Compute a circle model from a set of sample points
+     *
+     * @param data The full dataset
+     * @param samples Indices of points to use for model fitting
+     * @return Circle3D The fitted circle model
+     */
+    virtual Circle3D ComputeModel(const std::vector<Point3>& data, const std::set<int>& samples)
+    {
+        // Convert sample points to cv::Point3d format for CGA fitting
+        std::vector<cv::Point3d> pcd;
+        for (auto itr = samples.begin(); itr != samples.end(); itr++)
+        {
+            const Point3& p = data[*itr];
+            pcd.push_back(cv::Point3d(p.x_, p.y_, p.z_));
+        }
+
+        // Fit circle using robust CGA method
+        Eigen::Matrix<double, 3, 1> fit_center;
+        double fit_radius;
+        Eigen::Matrix<double, 3, 1> fit_normal;
+        robust_cga::RobustFit3DCircle::Fit(pcd, fit_center, fit_radius, &fit_normal);
+
+        // Create and return the circle model
+        Circle3D circle;
+        circle.center_ = fit_center;
+        circle.radius_ = fit_radius;
+        circle.normal_ = fit_normal;
+        return circle;
+    }
+
+    /**
+     * @brief Compute the error between a point and a circle model
+     *
+     * Calculates the 3D distance from a point to a circle, considering both
+     * the distance to the circle's plane and the distance to the circle's edge.
+     *
+     * @param circle The circle model
+     * @param point The point to evaluate
+     * @return double The error distance
+     */
+    virtual double ComputeError(const Circle3D& circle, const Point3& point)
+    {
+        Eigen::Vector3d pt(point.x_, point.y_, point.z_);
+        Eigen::Vector3d d = circle.center_ - pt;
+        Eigen::Vector3d vecC = circle.normal_;
+
+        // Handle degenerate case (zero normal vector)
+        if (vecC.norm() == 0)
+            return std::numeric_limits<double>::max();
+
+        // Calculate the plane equation: ax + by + cz + d = 0
+        double k = -vecC.dot(circle.center_);
+        Eigen::Vector4d plane_eq(vecC[0], vecC[1], vecC[2], k);
+
+        // Distance from point to the circle's plane
+        double dist_pt_plane = (plane_eq[0] * pt[0] + plane_eq[1] * pt[1] +
+                               plane_eq[2] * pt[2] + plane_eq[3]) / vecC.norm();
+
+        // Distance from point to the circle's edge (projected onto the plane)
+        Eigen::Vector3d dist_pt_inf_circle_vec = vecC.cross(d);
+        double dist_pt_inf_circle = dist_pt_inf_circle_vec.norm() - circle.radius_;
+
+        // Total distance from point to circle (hypotenuse of the two distances)
+        double dist_pt = std::sqrt(std::pow(dist_pt_inf_circle, 2) + std::pow(dist_pt_plane, 2));
+
+        return dist_pt;
+    }
+};
+
+/**
+ * @brief Generate 3D circle points using spherical coordinates
+ *
+ * Creates a set of 3D points that lie on a circle defined by:
+ * - Center point c
+ * - Radius r
+ * - Orientation defined by spherical angles theta (azimuth) and phi (zenith)
+ *
+ * @tparam T Numeric type for calculations
+ * @tparam Derived Eigen vector type for center
+ * @tparam Point3 Point type for output
+ * @param tlist List of parameter values (angles) for circle generation
+ * @param c Center of the circle
+ * @param r Radius of the circle
+ * @param theta Azimuth angle (rotation around z-axis)
+ * @param phi Zenith angle (inclination from z-axis)
+ * @param circle_points Output vector to store generated points
+ */
 template <typename T, typename Derived, typename Point3>
 void GenerateCircleByAngles(std::vector<T> tlist, Derived c, T r, T theta, T phi, std::vector<Point3> &circle_points)
 {
+    // Calculate normal vector of the circle's plane using spherical coordinates
     Eigen::Matrix<typename Derived::Scalar, 3, 1> n;
-    Eigen::Matrix<typename Derived::Scalar, 3, 1> u;
     n << std::cos(phi) * std::sin(theta), std::sin(phi)*std::sin(theta), std::cos(theta);
+
+    // Calculate first tangent vector (perpendicular to normal and z-axis)
+    Eigen::Matrix<typename Derived::Scalar, 3, 1> u;
     u << -std::sin(phi), std::cos(phi), 0;
 
-
+    // Generate circle points using parametric equation
     for (auto t : tlist)
     {
         Point3 pt;
         Eigen::Matrix<typename Derived::Scalar, 3, 1> res;
+
+        // Parametric circle equation: P(t) = center + r*cos(t)*u + r*sin(t)*(n×u)
         res = r*std::cos(t)*u + r*std::sin(t)*n.cross(u) + c;
 
+        // Convert to point format
         pt.x = res(0), pt.y = res(1), pt.z = res(2);
         circle_points.push_back(pt);
     }
     return;
 }
-#if 0
+// Predefined test data - array of 3D points (x,y,z coordinates)
+// This data represents points that should lie approximately on a 3D circle
 double test_data[] = {
     1.6832706697750046,0.9751299488013927,4.121819521070186,
     1.843071406095262,0.7714591223004006,4.094673424895004,
@@ -137,153 +304,255 @@ double test_data[] = {
     4.831560930720577,3.8450123897266977,2.6281700194971513,
     5.009755789421601,3.6679954318559833,2.9565565082123086};
 
+/**
+ * @brief Test modes for the circle fitting program
+ */
+enum class TestMode {
+    GENERATED,  // Generate synthetic circle data
+    GIVEN,      // Use provided test_data
+    RANSAC      // Use RANSAC with noise and outliers
+};
+
+/**
+ * @brief Parse command line mode string to TestMode enum
+ *
+ * @param mode_str String from command line argument
+ * @return TestMode Corresponding enum value
+ */
+TestMode parseMode(const std::string& mode_str) {
+    if (mode_str == "generated" || mode_str == "gen" || mode_str == "g") {
+        return TestMode::GENERATED;
+    } else if (mode_str == "given" || mode_str == "test" || mode_str == "data" || mode_str == "t") {
+        return TestMode::GIVEN;
+    } else if (mode_str == "ransac" || mode_str == "r") {
+        return TestMode::RANSAC;
+    } else {
+        std::cerr << "Unknown mode: " << mode_str << std::endl;
+        std::cerr << "Usage: " << std::endl;
+        std::cerr << "  generated/gen/g - Generate synthetic circle data" << std::endl;
+        std::cerr << "  given/test/data/t - Use provided test_data" << std::endl;
+        std::cerr << "  ransac/r - Use RANSAC with noise and outliers" << std::endl;
+        exit(1);
+    }
+}
+
+/**
+ * @brief Print usage information for the program
+ *
+ * @param program_name Name of the executable (argv[0])
+ */
+void printUsage(const char* program_name) {
+    std::cout << "Usage: " << program_name << " [mode] [options]" << std::endl;
+    std::cout << "Modes:" << std::endl;
+    std::cout << "  generated/gen/g - Generate synthetic circle data (default)" << std::endl;
+    std::cout << "  given/test/data/t - Use provided test_data" << std::endl;
+    std::cout << "  ransac/r - Use RANSAC with noise and outliers" << std::endl;
+    std::cout << std::endl;
+    std::cout << "RANSAC options:" << std::endl;
+    std::cout << "  --threshold <value>  - RANSAC threshold (default: 0.1)" << std::endl;
+    std::cout << "  --iterations <value> - RANSAC iterations (default: 300)" << std::endl;
+    std::cout << "  --noise <value>      - Noise level (default: 0.01)" << std::endl;
+    std::cout << "  --outliers <value>   - Number of outliers (default: 30)" << std::endl;
+}
+
+/**
+ * @brief Main function for 3D circle fitting test program
+ *
+ * Supports three modes:
+ * 1. GENERATED: Create synthetic circle data and fit it
+ * 2. GIVEN: Use predefined test data and fit it
+ * 3. RANSAC: Create noisy data with outliers and use RANSAC for robust fitting
+ *
+ * @param argc Number of command line arguments
+ * @param argv Command line arguments
+ * @return int Exit status
+ */
 int main(int argc, const char * argv[])
 {
-    // Configuration: set to true to generate synthetic data, false to use given test_data
-    bool use_generated_data = true;
+    // Parse command line arguments
+    TestMode mode = TestMode::GENERATED;  // Default mode
+    double ransac_threshold = 0.1;        // RANSAC distance threshold
+    int ransac_iterations = 300;          // Number of RANSAC iterations
+    double noise_level = 0.01;            // Gaussian noise standard deviation
+    int num_outliers = 30;                // Number of outlier points to add
+
     if (argc > 1) {
         std::string arg1(argv[1]);
-        if (arg1 == "test" || arg1 == "given" || arg1 == "data") {
-            use_generated_data = false;
+        if (arg1 == "--help" || arg1 == "-h") {
+            printUsage(argv[0]);
+            return 0;
+        }
+        mode = parseMode(arg1);
+    }
+
+    // Parse additional RANSAC options
+    for (int i = 2; i < argc; i += 2) {
+        if (i + 1 >= argc) break;
+
+        std::string option(argv[i]);
+        std::string value(argv[i + 1]);
+
+        if (option == "--threshold") {
+            ransac_threshold = std::stod(value);
+        } else if (option == "--iterations") {
+            ransac_iterations = std::stoi(value);
+        } else if (option == "--noise") {
+            noise_level = std::stod(value);
+        } else if (option == "--outliers") {
+            num_outliers = std::stoi(value);
         }
     }
 
     std::vector<cv::Point3d> circle_points;
 
-    if (use_generated_data) {
+    if (mode == TestMode::GENERATED) {
         /*-------------------------------------------------------------------------------
-         Generating circle
+         MODE 1: Generate synthetic circle data
+         Creates a perfect 3D circle and fits it to test the basic fitting algorithm
         -------------------------------------------------------------------------------*/
-        double r = 2.5;               // Radius
-        double c_array[] = {3,3,4};
-        Eigen::Map<Eigen::VectorXd, 0> c(c_array, 3);// Center
-        double theta = 45.0/180*M_PI;     // Azimuth
-        double phi   = -30.0/180*M_PI;    // Zenith
+        double r = 2.5;               // Circle radius
+        double c_array[] = {3,3,4};   // Circle center coordinates
+        Eigen::Map<Eigen::VectorXd, 0> c(c_array, 3);
+        double theta = 45.0/180*M_PI;     // Azimuth angle (rotation around z-axis)
+        double phi   = 0.0/180*M_PI;    // Zenith angle (inclination from z-axis)
 
+        // Generate parameter values for circle points
         std::vector<double> tlist;
         double ang = 0;
-        const double step = 2*M_PI / 150.0;
+        const double step = 2*M_PI / 150.0;  // 150 points around the circle
         while (ang <= 2*M_PI)
         {
             tlist.push_back(ang);
             ang+=step;
         }
 
+        // Generate the circle points
         GenerateCircleByAngles<double, Eigen::VectorXd, cv::Point3d>(tlist, c, r, theta, phi, circle_points);
         std::cout << "[INFO] Using generated circle data (" << circle_points.size() << " points)" << std::endl;
-    } else {
-        // Use given test_data
+        std::cout << "real_center: " << c << std::endl;
+        std::cout << "real_radius: " << r << std::endl;
+    } else if (mode == TestMode::GIVEN) {
+        /*-------------------------------------------------------------------------------
+         MODE 2: Use predefined test data
+         Loads the hardcoded test_data array and fits a circle to it
+        -------------------------------------------------------------------------------*/
         circle_points.clear();
-        size_t num_points = sizeof(test_data)/sizeof(double)/3;
+        size_t num_points = sizeof(test_data)/sizeof(double)/3;  // Each point has 3 coordinates
+
+        // Convert test_data array to cv::Point3d format
         for (size_t i = 0; i < num_points; i++)
         {
             circle_points.push_back(cv::Point3d(test_data[(i)*3],test_data[(i)*3+1],test_data[(i)*3+2]));
         }
         std::cout << "[INFO] Using provided test_data (" << circle_points.size() << " points)" << std::endl;
+    } else if (mode == TestMode::RANSAC) {
+        /*-------------------------------------------------------------------------------
+         MODE 3: RANSAC with noise and outliers
+         Creates a circle, adds noise and outliers, then uses RANSAC for robust fitting
+        -------------------------------------------------------------------------------*/
+        double r = 2.5;               // Circle radius
+        double c_array[] = {3,3,4};   // Circle center
+        Eigen::Map<Eigen::VectorXd, 0> c(c_array, 3);
+        double theta = 45.0/180*M_PI;     // Azimuth angle
+        double phi   = -30.0/180*M_PI;    // Zenith angle
+
+        // Generate fewer points for RANSAC (computational efficiency)
+        std::vector<double> tlist;
+        double ang = 0;
+        const double step = 2*M_PI / 100.0;  // 100 points around the circle
+        while (ang <= 2*M_PI)
+        {
+            tlist.push_back(ang);
+            ang+=step;
+        }
+
+        // Generate the base circle points
+        GenerateCircleByAngles<double, Eigen::VectorXd, cv::Point3d>(tlist, c, r, theta, phi, circle_points);
+
+        // Setup random number generators for noise and outliers
+        std::random_device SeedDevice;
+        std::mt19937 RNG = std::mt19937(SeedDevice());
+        std::uniform_int_distribution<int> UniDist(5, 10);  // Range for outlier coordinates
+        std::normal_distribution<double> PerturbDist(0, noise_level);  // Gaussian noise
+
+        // Convert to Point3 format and add noise to inlier points
+        std::vector<Point3> ransac_points;
+        for (int i = 0; i < circle_points.size(); ++i)
+        {
+            cv::Point3d pt(circle_points[i].x + PerturbDist(RNG),
+                           circle_points[i].y + PerturbDist(RNG),
+                           circle_points[i].z + PerturbDist(RNG));
+            ransac_points.push_back(Point3(pt.x, pt.y, pt.z));
+        }
+
+        // Add random outlier points
+        for (int i = 0; i < num_outliers; ++i)
+        {
+            cv::Point3d pt(UniDist(RNG) + PerturbDist(RNG),
+                           UniDist(RNG) + PerturbDist(RNG),
+                           UniDist(RNG) + PerturbDist(RNG));
+            ransac_points.push_back(Point3(pt.x, pt.y, pt.z));
+        }
+
+        std::cout << "[INFO] Using RANSAC mode with " << circle_points.size() << " inliers + "
+                  << num_outliers << " outliers (total: " << ransac_points.size() << " points)" << std::endl;
+        std::cout << "[INFO] RANSAC parameters: threshold=" << ransac_threshold
+                  << ", iterations=" << ransac_iterations << ", noise=" << noise_level << std::endl;
+
+        // Setup and run RANSAC
+        Timer timer;
+        Circle3D model;
+        Circle3DEstimator estimator;
+        RTL::RANSAC<Circle3D, Point3, std::vector<Point3> > ransac(&estimator);
+
+        ransac.SetParamIteration(ransac_iterations);
+        ransac.SetParamThreshold(ransac_threshold);
+
+        // Run RANSAC algorithm
+        timer.tic();
+        double loss = ransac.FindBest(model, ransac_points, ransac_points.size(), 5);
+        timer.toc(std::string("RANSAC Estimate: "));
+
+        // Find inliers from the best model
+        std::vector<int> inliers = ransac.FindInliers(model, ransac_points, ransac_points.size());
+
+        if (inliers.size() > 0)
+        {
+            // Convert inliers back to cv::Point3d format for final fitting
+            circle_points.clear();
+            for (auto &idx : inliers)
+            {
+                const Point3& pt = ransac_points[idx];
+                circle_points.emplace_back(pt.x_, pt.y_, pt.z_);
+            }
+            std::cout << "[INFO] RANSAC found " << circle_points.size() << " inliers" << std::endl;
+        } else {
+            std::cout << "[WARNING] RANSAC found no inliers, using original data" << std::endl;
+        }
+        std::cout << "real_center: " << c << std::endl;
+        std::cout << "real_radius: " << r << std::endl;
     }
 
-    // Optionally print points
+    // Optional: Print all points for debugging
     // for (auto pt : circle_points)
     //     std::cout << pt.x << "," << pt.y << "," << pt.z << std::endl;
 
-    Eigen::Matrix<double, 3, 1> fit_center;
-    double fit_radius;
+    /*-------------------------------------------------------------------------------
+     Final circle fitting using Conformal Geometric Algebra (CGA)
+     This is the core fitting algorithm that works on the final point set
+    -------------------------------------------------------------------------------*/
+    Eigen::Matrix<double, 3, 1> fit_center;  // Fitted circle center
+    double fit_radius;                        // Fitted circle radius
 
+    // Perform the actual circle fitting
+    Timer fit_timer;
+    fit_timer.tic();
     ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
+    fit_timer.toc(std::string("Circle Fitting: "));
 
+    // Output results
     std::cout << "fit_center: " << fit_center << std::endl;
     std::cout << "fit_radius: " << fit_radius << std::endl;
 
     return 0;
 }
-#endif
-
-#if 0
-#include <iostream>
-//#include <opencv2/opencv.hpp>
-#include <cmath>
-#include <random>
-#include <cstdint>
-
-#include "GRANSAC.hpp"
-#include "Circle3DModel.hpp"
-
-int main(int argc, char * argv[])
-{
-    /*-------------------------------------------------------------------------------
-     Generating circle
-     -------------------------------------------------------------------------------*/
-    double r = 2.5;               // Radius
-    double c_array[] = {3,3,4};
-    Eigen::Map<Eigen::VectorXd, 0> c(c_array, 3);// Center
-    double theta = 45.0/180*M_PI;     // Azimuth
-    double phi   = -30.0/180*M_PI;    // Zenith
-
-    //    Eigen::VectorXd t = Eigen::VectorXd::LinSpaced(100,0.0,2*M_PI).transpose();
-    std::vector<double> tlist;
-    double ang = 0;
-    const double step = 2*M_PI / 100;
-    while (ang <= 2*M_PI)
-    {
-        tlist.push_back(ang);
-        ang+=step;
-    }
-    std::vector<cv::Point3d> circle_points;
-    GenerateCircleByAngles<double, Eigen::VectorXd, cv::Point3d>(tlist, c, r, theta, phi, circle_points);
-
-
-
-    std::random_device SeedDevice;
-    std::mt19937 RNG = std::mt19937(SeedDevice());
-    std::uniform_int_distribution<int> UniDist(5, 10); // [Incl, Incl]
-    int Perturb = 0.01;
-    std::normal_distribution<GRANSAC::VPFloat> PerturbDist(0, Perturb);
-
-    std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> CandPoints;
-    for (int i = 0; i < circle_points.size(); ++i)
-    {
-        cv::Point3d pt(circle_points[i].x+PerturbDist(RNG),
-                       circle_points[i].y+PerturbDist(RNG),
-                       circle_points[i].z+PerturbDist(RNG));
-        std::shared_ptr<GRANSAC::AbstractParameter> CandPt = std::make_shared<Point3D>(pt.x, pt.y, pt.z);
-        CandPoints.push_back(CandPt);
-    }
-
-    for (int i = 0; i < 30; ++i)
-    {
-        cv::Point3d pt(UniDist(RNG) + PerturbDist(RNG),
-                       UniDist(RNG) + PerturbDist(RNG),
-                       UniDist(RNG) + PerturbDist(RNG));
-        std::shared_ptr<GRANSAC::AbstractParameter> CandPt = std::make_shared<Point3D>(pt.x, pt.y, pt.z);
-        CandPoints.push_back(CandPt);
-    }
-
-    Timer timer;
-    GRANSAC::RANSAC<Circle3DModel, 5> Estimator;
-    Estimator.Initialize(0.1, 300); // Threshold, iterations
-    timer.tic();
-    Estimator.Estimate(CandPoints);
-    timer.toc(std::string("Estimate: "));
-
-    auto BestInliers = Estimator.GetBestInliers();
-    if (BestInliers.size() > 0)
-    {
-        circle_points.clear();
-        for (auto& Inlier : BestInliers)
-        {
-            auto RPt = std::dynamic_pointer_cast<Point3D>(Inlier);
-            cv::Point3d Pt(RPt->x, RPt->y, RPt->z);
-            circle_points.emplace_back(Pt);
-        }
-        Eigen::Matrix<double, 3, 1> fit_center;
-        double fit_radius;
-
-        ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
-
-        std::cout << "fit_center: " << fit_center << std::endl;
-        std::cout << "fit_radius: " << fit_radius << std::endl;
-    }
-
-    return 0;
-}
-#endif
