@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import cv2 as cv
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from functools import partial, lru_cache
+import multiprocessing as mp
 
 from ellipse_center_refinement import *
 from tqdm import tqdm, trange
@@ -37,6 +40,86 @@ def generate_camera_pose():
                   [3.5]])
 
     return R, t
+
+
+
+@lru_cache(maxsize=1000)
+def _cached_eval_distance_f0(outer_tuple, center_tuple, K_tuple, marker_diameter, N=4):
+    """
+    Cached version of eval_distance_f0 for repeated computations.
+
+    Note: This requires converting numpy arrays to tuples for hashing.
+    """
+    outer = np.array(outer_tuple)
+    center = np.array(center_tuple)
+    K = np.array(K_tuple)
+    try:
+        return eval_distance_f0(outer, center, K, marker_diameter, N)
+    except Exception as e:
+        return np.inf
+
+def _evaluate_single_center(outer, center, K, marker_diameter, N=4):
+    """
+    Evaluate cost function for a single center point.
+
+    This is a helper function for parallel processing.
+    """
+    try:
+        return eval_distance_f0(outer, center, K, marker_diameter, N)
+    except Exception as e:
+        return np.inf
+
+def _evaluate_single_center_cached(outer, center, K, marker_diameter, N=4):
+    """
+    Evaluate cost function for a single center point with caching.
+
+    This is a helper function for parallel processing with caching.
+    """
+    try:
+        # Convert numpy arrays to tuples for caching
+        outer_tuple = tuple(outer.flatten())
+        center_tuple = tuple(center.flatten())
+        K_tuple = tuple(K.flatten())
+        return _cached_eval_distance_f0(outer_tuple, center_tuple, K_tuple, marker_diameter, N)
+    except Exception as e:
+        return np.inf
+
+
+def get_center_with_grid_search_cached(outer, centers, K, marker_diameter, N=4, max_workers=None):
+    """
+    Parallel version of grid search with caching for repeated computations.
+
+    This function is optimized for scenarios where similar computations are repeated.
+    """
+    if len(centers) == 0:
+        return centers, np.array([])
+
+    if max_workers is None:
+        max_workers = min(mp.cpu_count(), len(centers))
+
+    # Use ThreadPoolExecutor for better performance with NumPy operations
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Create partial function with fixed arguments
+        evaluate_func = partial(_evaluate_single_center_cached, outer, K=K, marker_diameter=marker_diameter, N=N)
+
+        # Submit all tasks
+        futures = [executor.submit(evaluate_func, center) for center in centers]
+
+        # Collect results with progress bar
+        scores = []
+        for future in tqdm(futures, desc="Evaluating centers (cached)", leave=False):
+            scores.append(future.result())
+
+        scores = np.array(scores)
+
+    # Sort by cost (ascending) to find minima
+    ids = np.argsort(scores)
+
+    # Return top 2 candidates as potential local minima
+    minimums = centers[ids[:2], :]
+    best_scores = scores[ids[:2]]
+
+    return centers, best_scores
 
 def get_center_with_grid_search(outer, centers, K, marker_diameter):
     fs = []
@@ -89,21 +172,20 @@ def recover_pose(p3d, p2d, K, dist=np.zeros(5)):
     R=cv.Rodrigues(rvec)[0]
     return R, tvec, inliers
 
-def monte_carlo_experiment(search_ratio=0.1):
+def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
     fx=600
     K = np.array([[fx,0,640],[0,fx,480],[0,0,1]],dtype='float32')
-    num=50
     R,t=generate_camera_pose()
     radius=3
 
     p3d=np.zeros((num,3),dtype='float32')
     p2d={}
     p2d['real']=np.zeros((num,2),dtype='float32')
-    p2d['image']=np.zeros((num,2),dtype='float32')
+    p2d['ellipse']=np.zeros((num,2),dtype='float32')
     p2d['gt1']=np.zeros((num,2),dtype='float32')
     p2d['gt2']=np.zeros((num,2),dtype='float32')
 
-    debug=True
+    debug=False
 
     Rres={}
     tres={}
@@ -278,13 +360,18 @@ def monte_carlo_experiment(search_ratio=0.1):
 
 
         p3d[i,:]=c3d.T
-        p2d['image'][i,:]=np.array([mmcx,mmcy])
+        p2d['ellipse'][i,:]=np.array([ex,ey])
         p2d['real'][i, :] = np.array([uv_circular_center[0,0], uv_circular_center[1,0]])
         p2d['gt1'][i, :] = np.array([found_mc[0], found_mc[1]])
         p2d['gt2'][i, :] = np.array([another_mc[0], another_mc[1]])
 
+        print(f"p2d['ellipse'][i,:]: {p2d['ellipse'][i,:]}")
+        print(f"p2d['real'][i, :]: {p2d['real'][i, :]}")
+        print(f"p2d['gt1'][i, :]: {p2d['gt1'][i, :]}")
+        print(f"p2d['gt2'][i, :]: {p2d['gt2'][i, :]}")
+
     Rres['real'], tres['real'], inliers['real']=recover_pose(p3d,p2d['real'],K)
-    Rres['image'], tres['image'], inliers['image'] = recover_pose(p3d, p2d['image'], K)
+    Rres['ellipse'], tres['ellipse'], inliers['ellipse'] = recover_pose(p3d, p2d['ellipse'], K)
     Rres['gt1'], tres['gt1'], inliers['gt1'] = recover_pose(p3d, p2d['gt1'], K)
     Rres['gt2'], tres['gt2'], inliers['gt2'] = recover_pose(p3d, p2d['gt2'], K)
 
@@ -298,10 +385,66 @@ def monte_carlo_experiment(search_ratio=0.1):
 
     return avg_err, Rres, tres, R, t
 
-if __name__=='__main__':
-    avg_err, Rres, tres, R, t = monte_carlo_experiment(search_ratio=0.8)
-    print(avg_err)
-    print(Rres)
-    print(tres)
-    print(R)
-    print(t)
+def analyze_results(avg_err, Rres, tres, R, t):
+    """
+    Analyze and display experiment results.
+
+    Args:
+        avg_err: Average reprojection errors for each method
+        Rres: Recovered rotation matrices
+        tres: Recovered translation vectors
+        R: True rotation matrix
+        t: True translation vector
+    """
+    print("\\n" + "="*60)
+    print("EXPERIMENT RESULTS SUMMARY")
+    print("="*60)
+
+    # Display reprojection errors
+    print("\\nReprojection Errors (pixels):")
+    print("-" * 40)
+    for method, error in avg_err.items():
+        if error < np.inf:
+            print(f"{method:12}: {error:8.3f}")
+        else:
+            print(f"{method:12}: Failed")
+
+    # Display pose accuracy (if available)
+    print("\\nPose Recovery Success:")
+    print("-" * 40)
+    for method in avg_err.keys():
+        if Rres[method] is not None:
+            print(f"{method:12}: Success")
+        else:
+            print(f"{method:12}: Failed")
+
+    # Method comparison
+    print("\\nMethod Ranking (by accuracy):")
+    print("-" * 40)
+    valid_methods = [(method, error) for method, error in avg_err.items()
+                    if error < np.inf]
+    valid_methods.sort(key=lambda x: x[1])
+
+    for i, (method, error) in enumerate(valid_methods, 1):
+        print(f"{i}. {method:12}: {error:8.3f} pixels")
+
+    print("\\n" + "="*60)
+
+if __name__ == '__main__':
+    """
+    Main execution block for the ellipse center refinement experiment.
+
+    This script runs a Monte Carlo experiment comparing different methods
+    for estimating the center of a projected 3D circle from 2D ellipse observations.
+    """
+    print("Starting Ellipse Center Refinement Experiment")
+    print("=" * 50)
+    # Run the main experiment
+    avg_err, Rres, tres, R, t = monte_carlo_experiment(num=10, search_ratio=0.5)
+
+    # Analyze and display results
+    analyze_results(avg_err, Rres, tres, R, t)
+
+    # Optional: Run parameter optimization
+    # optimal_ratio = optimize_search_parameters()
+    # print(f"\\nRecommended search ratio: {optimal_ratio}")
