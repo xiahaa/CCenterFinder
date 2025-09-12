@@ -48,8 +48,8 @@ include_directories(
 link_directories(${PCL_LIBRARY_DIRS} ${OpenCV_LIBS})
 add_definitions(${PCL_DEFINITIONS})
 
-# add_executable (demo src/main.cpp)
-# target_link_libraries (demo ${OPENCV_LIBRARIES} ${GLOG_LIBRARIES})
+add_executable (simple_test src/simple_test.cpp)
+target_link_libraries (simple_test ${OPENCV_LIBRARIES} ${GLOG_LIBRARIES})
 
 add_executable(benchmark3d src/benchmark_circle_fitting_noise.cpp)
 target_link_libraries(benchmark3d ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES})

@@ -21,14 +21,14 @@ void GenerateCircleByAngles(std::vector<T> tlist, Derived c, T r, T theta, T phi
     Eigen::Matrix<typename Derived::Scalar, 3, 1> u;
     n << std::cos(phi) * std::sin(theta), std::sin(phi)*std::sin(theta), std::cos(theta);
     u << -std::sin(phi), std::cos(phi), 0;
-    
-    
+
+
     for (auto t : tlist)
     {
         Point3 pt;
         Eigen::Matrix<typename Derived::Scalar, 3, 1> res;
         res = r*std::cos(t)*u + r*std::sin(t)*n.cross(u) + c;
-        
+
         pt.x = res(0), pt.y = res(1), pt.z = res(2);
         circle_points.push_back(pt);
     }
@@ -137,55 +137,68 @@ double test_data[] = {
     4.831560930720577,3.8450123897266977,2.6281700194971513,
     5.009755789421601,3.6679954318559833,2.9565565082123086};
 
-int main(int argc, const char * argv[]) {
-    // insert code here...
-//    std::cout << "Hello, World!\n";
-    
-    /*-------------------------------------------------------------------------------
-     Generating circle
-    -------------------------------------------------------------------------------*/
-    double r = 2.5;               // Radius
-    double c_array[] = {3,3,4};
-    Eigen::Map<Eigen::VectorXd, 0> c(c_array, 3);// Center
-    double theta = 45.0/180*M_PI;     // Azimuth
-    double phi   = -30.0/180*M_PI;    // Zenith
-    
-//    Eigen::VectorXd t = Eigen::VectorXd::LinSpaced(100,0.0,2*M_PI).transpose();
-    std::vector<double> tlist;
-    double ang = 0;
-    const double step = 2*M_PI / 150.0;
-    while (ang <= 2*M_PI)
-    {
-        tlist.push_back(ang);
-        ang+=step;
+int main(int argc, const char * argv[])
+{
+    // Configuration: set to true to generate synthetic data, false to use given test_data
+    bool use_generated_data = true;
+    if (argc > 1) {
+        std::string arg1(argv[1]);
+        if (arg1 == "test" || arg1 == "given" || arg1 == "data") {
+            use_generated_data = false;
+        }
     }
-    
+
     std::vector<cv::Point3d> circle_points;
-    GenerateCircleByAngles<double, Eigen::VectorXd, cv::Point3d>(tlist, c, r, theta, phi, circle_points);
-    
-    // use test data
-//    circle_points.clear();
-//    for (int i = 0; i < sizeof(test_data)/sizeof(double)/3; i++)
-//    {
-//        circle_points.push_back(cv::Point3d(test_data[(i)*3],test_data[(i)*3+1],test_data[(i)*3+2]));
-//    }
-    
-//    for (auto pt : circle_points)
-//        std::cout << pt.x << "," << pt.y << "," << pt.z << std::endl;
+
+    if (use_generated_data) {
+        /*-------------------------------------------------------------------------------
+         Generating circle
+        -------------------------------------------------------------------------------*/
+        double r = 2.5;               // Radius
+        double c_array[] = {3,3,4};
+        Eigen::Map<Eigen::VectorXd, 0> c(c_array, 3);// Center
+        double theta = 45.0/180*M_PI;     // Azimuth
+        double phi   = -30.0/180*M_PI;    // Zenith
+
+        std::vector<double> tlist;
+        double ang = 0;
+        const double step = 2*M_PI / 150.0;
+        while (ang <= 2*M_PI)
+        {
+            tlist.push_back(ang);
+            ang+=step;
+        }
+
+        GenerateCircleByAngles<double, Eigen::VectorXd, cv::Point3d>(tlist, c, r, theta, phi, circle_points);
+        std::cout << "[INFO] Using generated circle data (" << circle_points.size() << " points)" << std::endl;
+    } else {
+        // Use given test_data
+        circle_points.clear();
+        size_t num_points = sizeof(test_data)/sizeof(double)/3;
+        for (size_t i = 0; i < num_points; i++)
+        {
+            circle_points.push_back(cv::Point3d(test_data[(i)*3],test_data[(i)*3+1],test_data[(i)*3+2]));
+        }
+        std::cout << "[INFO] Using provided test_data (" << circle_points.size() << " points)" << std::endl;
+    }
+
+    // Optionally print points
+    // for (auto pt : circle_points)
+    //     std::cout << pt.x << "," << pt.y << "," << pt.z << std::endl;
 
     Eigen::Matrix<double, 3, 1> fit_center;
     double fit_radius;
-    
+
     ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
-    
+
     std::cout << "fit_center: " << fit_center << std::endl;
     std::cout << "fit_radius: " << fit_radius << std::endl;
-    
+
     return 0;
 }
 #endif
 
-#if 1
+#if 0
 #include <iostream>
 //#include <opencv2/opencv.hpp>
 #include <cmath>
@@ -218,7 +231,7 @@ int main(int argc, char * argv[])
     std::vector<cv::Point3d> circle_points;
     GenerateCircleByAngles<double, Eigen::VectorXd, cv::Point3d>(tlist, c, r, theta, phi, circle_points);
 
-    
+
 
     std::random_device SeedDevice;
     std::mt19937 RNG = std::mt19937(SeedDevice());
@@ -251,7 +264,7 @@ int main(int argc, char * argv[])
     timer.tic();
     Estimator.Estimate(CandPoints);
     timer.toc(std::string("Estimate: "));
-    
+
     auto BestInliers = Estimator.GetBestInliers();
     if (BestInliers.size() > 0)
     {
@@ -270,7 +283,7 @@ int main(int argc, char * argv[])
         std::cout << "fit_center: " << fit_center << std::endl;
         std::cout << "fit_radius: " << fit_radius << std::endl;
     }
-    
+
     return 0;
 }
 #endif
