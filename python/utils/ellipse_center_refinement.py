@@ -155,7 +155,7 @@ def eval_distance_f(outer, x, x0, K, marker_diamater, N=4):
 
     return ret
 
-def get_distance_with_gradient_descent(outer, x0, step, plambda, tolx, tolfunc, K, marker_diameter, verbose=Flase):
+def get_distance_with_gradient_descent(outer, x0, step, plambda, tolx, tolfunc, K, marker_diameter, verbose=False):
     x = x0.copy()
     it = 1
     g = np.zeros((2,))

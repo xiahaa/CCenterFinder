@@ -66,4 +66,11 @@ def findHomography(ell,center):
     return (H,Q,T)
 
 if __name__=="__main__":
-    pass
+    import cv2
+    ell = [(3.1,3.6),(5,3),45.0]
+    # ell = np.array([[3.1,3.6],[5,3],[45.0]])
+    center = np.array([3.0,4.0])
+    H, Q, T = findHomography(ell, center)
+    print(H)
+    print(Q)
+    print(T)
