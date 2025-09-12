@@ -210,7 +210,7 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
     fx=600
     K = np.array([[fx,0,640],[0,fx,480],[0,0,1]],dtype='float32')
     R,t=generate_camera_pose()
-    radius=3
+    radius=5
 
     p3d=np.zeros((num,3),dtype='float32')
     p2d={}
@@ -219,12 +219,14 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
     p2d['gt1']=np.zeros((num,2),dtype='float32')
     p2d['gt2']=np.zeros((num,2),dtype='float32')
 
-    debug=False
+    debug=True
 
     Rres={}
     tres={}
     inliers={}
-    for i in range(num):
+    from tqdm import tqdm
+    for i in tqdm(range(num),total=num,leave=False):
+    # for i in range(num):
         P,c3d=generate_points(radius)
         Pc=R@P+t
         Pcn=Pc/Pc[-1,:]
@@ -322,11 +324,11 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
             mask_norm = (mask.squeeze().astype('float32'))/255.0
             bg_cmap = LinearSegmentedColormap.from_list('mask_bg', ['#dddddd', '#ffffff'], N=256)
             ax0.imshow(mask_norm, cmap=bg_cmap, vmin=0.0, vmax=1.0, extent=[0,1280,960,0], interpolation='nearest')
-            ax0.scatter(uv[0,:], uv[1,:], s=6, c='#1f77b4', alpha=0.5, edgecolors='none', label='Input Points')
+            # ax0.scatter(uv[0,:], uv[1,:], s=6, c='#1f77b4', alpha=0.5, edgecolors='none', label='Input Points')
             ax0.plot(ep[0, :], ep[1, :], color='#00bfa6', linewidth=2, label='Fitted Ellipse')
-            ax0.scatter([ex], [ey], s=70, facecolors='none', edgecolors='#ffcc00', linewidths=2, label='Ellipse Center')
-            ax0.scatter([uv_circular_center[0, 0]], [uv_circular_center[1, 0]], s=140, marker='x', color='#e41a1c', linewidths=2, label='Projected Circular Center')
-            ax0.scatter([mmcx], [mmcy], s=60, marker='D', color='#984ea3', edgecolors='white', linewidths=0.8, label='Center of Mass')
+            # ax0.scatter([ex], [ey], s=70, facecolors='none', edgecolors='#ffcc00', linewidths=2, label='Ellipse Center')
+            # ax0.scatter([uv_circular_center[0, 0]], [uv_circular_center[1, 0]], s=140, marker='x', color='#e41a1c', linewidths=2, label='Projected Circular Center')
+            # ax0.scatter([mmcx], [mmcy], s=60, marker='D', color='#984ea3', edgecolors='white', linewidths=0.8, label='Center of Mass')
             ax0.set_xlim(xmin, xmax)
             ax0.set_ylim(ymin, ymax)
             ax0.set_aspect('equal')
@@ -355,11 +357,13 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
             H, W = valid_cost.shape
             X, Y = np.meshgrid(np.linspace(0, 1280, W), np.linspace(0, 960, H))
             ax1.contour(X, Y, valid_cost, levels=10, colors='white', linewidths=0.6, alpha=0.8)
-            ax1.scatter([ex], [ey], s=50, facecolors='none', edgecolors='#ffcc00', linewidths=1.8, label='Ellipse Center')
-            ax1.scatter([uv_circular_center[0, 0]], [uv_circular_center[1, 0]], s=140, marker='x', color='#e41a1c', linewidths=1.8, label='Projected Circular Center')
-            ax1.scatter([mmcx], [mmcy], s=50, marker='D', color='#984ea3', edgecolors='white', linewidths=0.8, label='Center of Mass')
-            ax1.plot(found_mc[0], found_mc[1], 'g*', markersize=10, label='local minimum 1')
-            ax1.plot(another_mc[0], another_mc[1], 'g^', markersize=8, label='local minimum 2')
+            # Overlay fitted ellipse curve on the score map
+            ax1.plot(ep[0, :], ep[1, :], color='#00bfa6', linewidth=2, alpha=0.9, label='Fitted Ellipse')
+            # ax1.scatter([ex], [ey], s=50, facecolors='none', edgecolors='#ffcc00', linewidths=1.8, label='Ellipse Center')
+            # ax1.scatter([uv_circular_center[0, 0]], [uv_circular_center[1, 0]], s=140, marker='x', color='#e41a1c', linewidths=1.8, label='Projected Circular Center')
+            # ax1.scatter([mmcx], [mmcy], s=50, marker='D', color='#984ea3', edgecolors='white', linewidths=0.8, label='Center of Mass')
+            # ax1.plot(found_mc[0], found_mc[1], 'g*', markersize=10, label='local minimum 1')
+            # ax1.plot(another_mc[0], another_mc[1], 'g^', markersize=8, label='local minimum 2')
             ax1.set_xlim(xmin, xmax)
             ax1.set_ylim(ymin, ymax)
             ax1.set_aspect('equal')
@@ -395,10 +399,10 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
             labels_short = [label_map.get(l, l) for l in labels]
             # Set columns equal to number of entries to keep legend in one row
             ncols = max(1, len(labels_short))
-            fig.legend(handles, labels_short,
-                       loc='lower center', ncol=ncols, frameon=True, framealpha=0.95,
-                       bbox_to_anchor=(0.5, -0.02), fancybox=True, borderpad=0.8,
-                       handlelength=2.2, handletextpad=0.8, labelspacing=0.3)
+            # fig.legend(handles, labels_short,
+                    #    loc='lower center', ncol=ncols, frameon=True, framealpha=0.95,
+                    #    bbox_to_anchor=(0.5, -0.02), fancybox=True, borderpad=0.8,
+                    #    handlelength=2.2, handletextpad=0.8, labelspacing=0.3)
 
             # Leave space at bottom for the figure legend
             plt.tight_layout(rect=[0, 0.10, 1, 1], pad=0.6)
@@ -414,11 +418,6 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
         p2d['real'][i, :] = np.array([uv_circular_center[0,0], uv_circular_center[1,0]])
         p2d['gt1'][i, :] = np.array([found_mc[0], found_mc[1]])
         p2d['gt2'][i, :] = np.array([another_mc[0], another_mc[1]])
-
-        print(f"p2d['ellipse'][i,:]: {p2d['ellipse'][i,:]}")
-        print(f"p2d['real'][i, :]: {p2d['real'][i, :]}")
-        print(f"p2d['gt1'][i, :]: {p2d['gt1'][i, :]}")
-        print(f"p2d['gt2'][i, :]: {p2d['gt2'][i, :]}")
 
     Rres['real'], tres['real'], inliers['real']=recover_pose(p3d,p2d['real'],K)
     Rres['ellipse'], tres['ellipse'], inliers['ellipse'] = recover_pose(p3d, p2d['ellipse'], K)

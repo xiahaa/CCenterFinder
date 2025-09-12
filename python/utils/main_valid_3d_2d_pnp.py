@@ -14,15 +14,16 @@ r_error=np.zeros((num_experiments,4))
 t_error=np.zeros((num_experiments,4))
 reprojection_error = np.zeros((num_experiments,4))
 
-import sophus as sp
+import sophuspy as sp
 
 pbar=tqdm(total=num_experiments)
 i=0
 while i < num_experiments:
     try:
-        avg_err, Rres, tres, R, t = monte_carlo_experiment(0.3)
+        avg_err, Rres, tres, R, t = monte_carlo_experiment(search_ratio=0.3)
         pbar.update(1)
     except:
+        i+=1
         continue
 
     for j, key in enumerate(Rres.keys()):
@@ -48,4 +49,3 @@ print(np.mean(reprojection_error[:0]))
 print(np.mean(reprojection_error[:1]))
 print(np.mean(reprojection_error[:2]))
 print(np.mean(reprojection_error[:3]))
-
