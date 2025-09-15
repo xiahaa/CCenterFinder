@@ -48,7 +48,7 @@ def run_analysis(results_dir="results", output_dir="analysis_output"):
     print("Analyzing results...")
 
     try:
-        cmd = [sys.executable, "python/utils/analyze_cpp_results.py",
+        cmd = [sys.executable, "python/utils/plot_monte_carlo_results.py.py",
                "--results_dir", results_dir, "--output_dir", output_dir]
         subprocess.run(cmd, check=True)
 

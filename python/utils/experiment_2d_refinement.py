@@ -210,7 +210,7 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
     fx=600
     K = np.array([[fx,0,640],[0,fx,480],[0,0,1]],dtype='float32')
     R,t=generate_camera_pose()
-    radius=5
+    radius=2
 
     p3d=np.zeros((num,3),dtype='float32')
     p2d={}
@@ -219,7 +219,7 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
     p2d['gt1']=np.zeros((num,2),dtype='float32')
     p2d['gt2']=np.zeros((num,2),dtype='float32')
 
-    debug=True
+    debug=False
 
     Rres={}
     tres={}

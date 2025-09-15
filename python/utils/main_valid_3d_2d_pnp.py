@@ -20,7 +20,7 @@ pbar=tqdm(total=num_experiments)
 i=0
 while i < num_experiments:
     try:
-        avg_err, Rres, tres, R, t = monte_carlo_experiment(search_ratio=0.3)
+        avg_err, Rres, tres, R, t = monte_carlo_experiment(num = 20, search_ratio=0.3)
         pbar.update(1)
     except:
         i+=1

@@ -246,6 +246,14 @@ int main(int argc, const char * argv[]) {
     std::map<double, std::vector<double>> error_center_pcl_map;
     std::map<double, std::vector<double>> error_center_cga_map;
 
+    // ensure output directory exists
+    const std::string out_dir = "results";
+    try {
+        std::filesystem::create_directories(out_dir);
+    } catch (const std::exception &e) {
+        std::cerr << "Failed to create results directory: " << e.what() << std::endl;
+    }
+
     std::random_device SeedDevice;
     std::mt19937 RNG = std::mt19937(SeedDevice());
     std::uniform_int_distribution<int> UniDist(10, 20); // [Incl, Incl]
@@ -258,6 +266,21 @@ int main(int argc, const char * argv[]) {
         std::cout << "outlier_prob: " << prob << std::endl;
         std::vector<double> error_center_pcl_list;
         std::vector<double> error_center_cga_list;
+
+        // open per-method result files for this outlier probability
+        std::ostringstream prob_str;
+        prob_str << std::fixed << std::setprecision(2) << prob;
+        const std::string prob_token = prob_str.str();
+
+        std::ostringstream pcl_path;
+        pcl_path << out_dir << "/outlier_prob_" << prob_token << "_pcl_results.txt";
+        std::ofstream pcl_out(pcl_path.str());
+        pcl_out << "center_error,radius_error,success" << std::endl;
+
+        std::ostringstream cga_path;
+        cga_path << out_dir << "/outlier_prob_" << prob_token << "_cga_results.txt";
+        std::ofstream cga_out(cga_path.str());
+        cga_out << "center_error,radius_error,success" << std::endl;
         for (int i = 0; i < num_experiments; i++)
         {
             if (i % 100 == 0)
@@ -321,11 +344,31 @@ int main(int argc, const char * argv[]) {
             // std::cout << " Center GT: " << centers[0].x << " " << centers[0].y << " " << centers[0].z << std::endl;
 
             // compute error of centers
-            Eigen::Vector3d error_center_pcl = center_pcl - Eigen::Vector3d(centers[0].x, centers[0].y, centers[0].z);
-            Eigen::Vector3d error_center_cga = fit_center - Eigen::Vector3d(centers[0].x, centers[0].y, centers[0].z);
+            Eigen::Vector3d gt_center(centers[0].x, centers[0].y, centers[0].z);
+            Eigen::Vector3d error_center_pcl = center_pcl - gt_center;
+            Eigen::Vector3d error_center_cga = fit_center - gt_center;
 
+            // estimate ground-truth radius from original (pre-outlier) points
+            double gt_radius = 0.0;
+            if (!circle_points.empty()) {
+                double acc = 0.0;
+                for (const auto &pt : circle_points) {
+                    Eigen::Vector3d v(pt.x, pt.y, pt.z);
+                    acc += (v - gt_center).norm();
+                }
+                gt_radius = acc / static_cast<double>(circle_points.size());
+            }
+
+            double radius_error_pcl = std::abs(radius_pcl - gt_radius);
+            double radius_error_cga = std::abs(fit_radius - gt_radius);
+
+            // record
             error_center_pcl_list.push_back(error_center_pcl.norm());
             error_center_cga_list.push_back(error_center_cga.norm());
+
+            // success flag: always 1 for now (both methods returned a result)
+            pcl_out << error_center_pcl.norm() << "," << radius_error_pcl << ",1" << std::endl;
+            cga_out << error_center_cga.norm() << "," << radius_error_cga << ",1" << std::endl;
         }
 
         // compute mean error
@@ -337,6 +380,23 @@ int main(int argc, const char * argv[]) {
 
         error_center_pcl_map[noise] = error_center_pcl_list;
         error_center_cga_map[noise] = error_center_cga_list;
+
+        // close per-method files
+        pcl_out.close();
+        cga_out.close();
+
+        // append to summary CSV
+        std::ostringstream summary_path;
+        summary_path << out_dir << "/outlier_summary.csv";
+
+        const bool summary_exists = std::filesystem::exists(summary_path.str());
+        std::ofstream summary_out(summary_path.str(), std::ios::app);
+        if (!summary_exists) {
+            summary_out << "prob,method,mean_center_error" << std::endl;
+        }
+        summary_out << prob_token << ",PCL," << mean_error_center_pcl << std::endl;
+        summary_out << prob_token << ",CGA," << mean_error_center_cga << std::endl;
+        summary_out.close();
 
     }
     return 0;
