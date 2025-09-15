@@ -15,6 +15,13 @@ mpl.rcParams['font.family'] = 'sans-serif'
 mpl.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Liberation Sans', 'sans-serif']
 mpl.rcParams['font.size'] = 12
 
+senario_mapping = {
+    'isotropic_noise': 'A',
+    'limited_arc': 'B',
+    'sparse_points': 'C',
+    'symmetric_distribution': 'D'
+}
+
 def load_results(results_dir: str) -> Dict[str, Dict[str, np.ndarray]]:
     """
     Load results from C++ benchmark output files.
@@ -42,8 +49,8 @@ def load_results(results_dir: str) -> Dict[str, Dict[str, np.ndarray]]:
         parts = filename.replace("_results.txt", "").split("_")
         if len(parts) >= 2:
             method = parts[-1]  # Last part is method (pcl, cga, classical)
-            scenario = "_".join(parts[:-1])  # Everything else is scenario
-
+            rawscenario = "_".join(parts[:-1])  # Everything else is scenario
+            scenario = senario_mapping[rawscenario]
             if scenario not in results:
                 results[scenario] = {}
 
@@ -106,7 +113,7 @@ def plot_bar_charts(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
     method_labels = ['PCL', 'CGA']
     colors = ['#85c1e9', '#f9e79f']  # light blue, light yellow
     x = np.arange(len(scenarios))
-    width = 0.25
+    width = 0.4
 
     fig1, ax = plt.subplots(figsize=(8, 5))
 
@@ -126,10 +133,10 @@ def plot_bar_charts(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
         ax.bar(x + i * width, means, width, label=label, color=color, alpha=0.8,
                 yerr=None, capsize=5)
 
-    ax.set_xticks(x + width)
-    ax.set_xticklabels(scenarios, rotation=20, ha='right')
+    ax.set_xticks(x + width/2)
+    ax.set_xticklabels(scenarios, rotation=0, ha='right')
     ax.set_ylabel('Center Error')
-    ax.set_title('Center Error Comparison')
+    # ax.set_title('Center Error Comparison')
     ax.grid(True, alpha=0.3)
     # ax.legend()
     fig1.tight_layout()
