@@ -997,7 +997,7 @@ def _plot_compare(ax, P: np.ndarray, C: np.ndarray, r: float, n: np.ndarray, tit
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    ax.set_facecolor('#f9f9fb')
+    ax.set_facecolor('white')
     ax.grid(False)
     set_axes_equal_3d(ax)
     # Consistent, clear 3D view angle
