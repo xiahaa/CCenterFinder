@@ -105,13 +105,39 @@ def plot_bar_charts(results: Dict[str, Dict[str, np.ndarray]], output_dir: str):
     methods = ['pcl', 'cga']
     method_labels = ['PCL', 'CGA']
     colors = ['#85c1e9', '#f9e79f']  # light blue, light yellow
-
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-    # Center error plot
-    ax1 = axes[0]
     x = np.arange(len(scenarios))
     width = 0.25
+
+    fig1, ax = plt.subplots(figsize=(8, 5))
+
+    for i, (method, label, color) in enumerate(zip(methods, method_labels, colors)):
+        means = []
+        stds = []
+
+        for scenario in scenarios:
+            if method in results[scenario]:
+                stats = compute_statistics(results[scenario][method])
+                means.append(stats['mean_center_error'])
+                stds.append(stats['std_center_error'])
+            else:
+                means.append(0)
+                stds.append(0)
+
+        ax.bar(x + i * width, means, width, label=label, color=color, alpha=0.8,
+                yerr=None, capsize=5)
+
+    ax.set_xticks(x + width)
+    ax.set_xticklabels(scenarios, rotation=20, ha='right')
+    ax.set_ylabel('Center Error')
+    ax.set_title('Center Error Comparison')
+    ax.grid(True, alpha=0.3)
+    # ax.legend()
+    fig1.tight_layout()
+    fig1.savefig(os.path.join(output_dir, "center_error_bars.png"), dpi=600, bbox_inches="tight")
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    # Center error plot
+    ax1 = axes[0]
 
     for i, (method, label, color) in enumerate(zip(methods, method_labels, colors)):
         means = []
