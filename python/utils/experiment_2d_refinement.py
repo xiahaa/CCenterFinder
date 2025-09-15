@@ -6,7 +6,7 @@ import cv2 as cv
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial, lru_cache
 import multiprocessing as mp
-
+import sophuspy as sp
 from ellipse_center_refinement import *
 from tqdm import tqdm, trange
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -43,84 +43,6 @@ def generate_camera_pose():
 
 
 
-@lru_cache(maxsize=1000)
-def _cached_eval_distance_f0(outer_tuple, center_tuple, K_tuple, marker_diameter, N=4):
-    """
-    Cached version of eval_distance_f0 for repeated computations.
-
-    Note: This requires converting numpy arrays to tuples for hashing.
-    """
-    outer = np.array(outer_tuple)
-    center = np.array(center_tuple)
-    K = np.array(K_tuple)
-    try:
-        return eval_distance_f0(outer, center, K, marker_diameter, N)
-    except Exception as e:
-        return np.inf
-
-def _evaluate_single_center(outer, center, K, marker_diameter, N=4):
-    """
-    Evaluate cost function for a single center point.
-
-    This is a helper function for parallel processing.
-    """
-    try:
-        return eval_distance_f0(outer, center, K, marker_diameter, N)
-    except Exception as e:
-        return np.inf
-
-def _evaluate_single_center_cached(outer, center, K, marker_diameter, N=4):
-    """
-    Evaluate cost function for a single center point with caching.
-
-    This is a helper function for parallel processing with caching.
-    """
-    try:
-        # Convert numpy arrays to tuples for caching
-        outer_tuple = tuple(outer.flatten())
-        center_tuple = tuple(center.flatten())
-        K_tuple = tuple(K.flatten())
-        return _cached_eval_distance_f0(outer_tuple, center_tuple, K_tuple, marker_diameter, N)
-    except Exception as e:
-        return np.inf
-
-
-def get_center_with_grid_search_cached(outer, centers, K, marker_diameter, N=4, max_workers=None):
-    """
-    Parallel version of grid search with caching for repeated computations.
-
-    This function is optimized for scenarios where similar computations are repeated.
-    """
-    if len(centers) == 0:
-        return centers, np.array([])
-
-    if max_workers is None:
-        max_workers = min(mp.cpu_count(), len(centers))
-
-    # Use ThreadPoolExecutor for better performance with NumPy operations
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Create partial function with fixed arguments
-        evaluate_func = partial(_evaluate_single_center_cached, outer, K=K, marker_diameter=marker_diameter, N=N)
-
-        # Submit all tasks
-        futures = [executor.submit(evaluate_func, center) for center in centers]
-
-        # Collect results with progress bar
-        scores = []
-        for future in tqdm(futures, desc="Evaluating centers (cached)", leave=False):
-            scores.append(future.result())
-
-        scores = np.array(scores)
-
-    # Sort by cost (ascending) to find minima
-    # ids = np.argsort(scores)
-
-    # Return top 2 candidates as potential local minima
-    # minimums = centers[ids[:2], :]
-    # best_scores = scores[ids[:2]]
-
-    return centers, scores
-
 def get_center_with_grid_search(outer, centers, K, marker_diameter):
     fs = []
     for c in centers:
@@ -131,6 +53,50 @@ def get_center_with_grid_search(outer, centers, K, marker_diameter):
     # ids = np.argsort(fs)
     # minimums = centers[ids[:2],:]
     # scores = fs[ids[:2]]
+    return centers, scores
+
+def get_center_with_grid_search_parallel(outer, centers, K, marker_diameter, N=None, max_workers=None, show_progress=False):
+    """
+    Parallel version of grid search that preserves input order and matches
+    get_center_with_grid_search results numerically (for the same N/signature).
+
+    Args:
+        outer: ellipse polynomial or other model passed to eval_distance_f0
+        centers: array of candidate centers shape (M, 2)
+        K: camera intrinsics
+        marker_diameter: passed through to eval_distance_f0
+        N: optional samples parameter; if None, call without N to mirror baseline
+        max_workers: number of threads; defaults to min(cpu, len(centers))
+        show_progress: whether to display a tqdm progress bar
+
+    Returns:
+        (centers, scores) where scores aligns one-to-one with centers
+    """
+    if centers is None or len(centers) == 0:
+        return centers, np.array([])
+
+    if max_workers is None:
+        max_workers = min(mp.cpu_count(), len(centers))
+
+    def _eval_one(c):
+        try:
+            if N is None:
+                return eval_distance_f0(outer, c, K, marker_diameter)
+            else:
+                return eval_distance_f0(outer, c, K, marker_diameter, N)
+        except Exception:
+            return np.inf
+
+    scores = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        it = (executor.submit(_eval_one, c) for c in centers)
+        if show_progress:
+            it = tqdm(it, total=len(centers), desc="Grid search (parallel)", leave=False)
+        # Preserve order by collecting in submission order
+        for fut in it:
+            scores.append(fut.result())
+
+    scores = np.asarray(scores)
     return centers, scores
 
 def select_minima_with_suppression(centers, scores, k=2, suppress_radius=15):
@@ -214,7 +180,7 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
 
     p3d=np.zeros((num,3),dtype='float32')
     p2d={}
-    p2d['real']=np.zeros((num,2),dtype='float32')
+    p2d['projected']=np.zeros((num,2),dtype='float32')
     p2d['ellipse']=np.zeros((num,2),dtype='float32')
     p2d['gt1']=np.zeros((num,2),dtype='float32')
     p2d['gt2']=np.zeros((num,2),dtype='float32')
@@ -225,7 +191,7 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
     tres={}
     inliers={}
     from tqdm import tqdm
-    for i in tqdm(range(num),total=num,leave=False):
+    for i in tqdm(range(num), total=num, leave=False):
     # for i in range(num):
         P,c3d=generate_points(radius)
         Pc=R@P+t
@@ -415,11 +381,11 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
 
         p3d[i,:]=c3d.T
         p2d['ellipse'][i,:]=np.array([ex,ey])
-        p2d['real'][i, :] = np.array([uv_circular_center[0,0], uv_circular_center[1,0]])
+        p2d['projected'][i, :] = np.array([uv_circular_center[0,0], uv_circular_center[1,0]])
         p2d['gt1'][i, :] = np.array([found_mc[0], found_mc[1]])
         p2d['gt2'][i, :] = np.array([another_mc[0], another_mc[1]])
 
-    Rres['real'], tres['real'], inliers['real']=recover_pose(p3d,p2d['real'],K)
+    Rres['projected'], tres['projected'], inliers['projected']=recover_pose(p3d,p2d['projected'],K)
     Rres['ellipse'], tres['ellipse'], inliers['ellipse'] = recover_pose(p3d, p2d['ellipse'], K)
     Rres['gt1'], tres['gt1'], inliers['gt1'] = recover_pose(p3d, p2d['gt1'], K)
     Rres['gt2'], tres['gt2'], inliers['gt2'] = recover_pose(p3d, p2d['gt2'], K)
@@ -432,7 +398,21 @@ def monte_carlo_experiment(num:int=50, search_ratio:float=0.1):
         errs[key], avg_err[key] = compute_reprojection_error(valid3d.T,
                                                              Rres[key], tres[key], K, valid2d.T)
 
-    return avg_err, Rres, tres, R, t
+    r_error, t_error = compute_pose_error(Rres, tres, R, t)
+
+    return avg_err, Rres, tres, R, t, r_error, t_error
+
+
+def compute_pose_error(Rres, tres, R, t):
+    r_error = {}
+    t_error = {}
+    for _, key in enumerate(Rres.keys()):
+        res_key = key
+        errR=sp.SO3(R.T@Rres[key])
+        r_error[res_key]=np.linalg.norm(errR.log())
+        t_error[res_key]=np.linalg.norm(tres[key]-t)
+
+    return r_error, t_error
 
 def analyze_results(avg_err, Rres, tres, R, t):
     """
@@ -479,7 +459,8 @@ def analyze_results(avg_err, Rres, tres, R, t):
 
     print("\\n" + "="*60)
 
-if __name__ == '__main__':
+
+def demo():
     """
     Main execution block for the ellipse center refinement experiment.
 
@@ -497,3 +478,11 @@ if __name__ == '__main__':
     # Optional: Run parameter optimization
     # optimal_ratio = optimize_search_parameters()
     # print(f"\\nRecommended search ratio: {optimal_ratio}")
+
+if __name__ == '__main__':
+    avg_err, Rres, tres, R, t, r_error, t_error = monte_carlo_experiment(num = 10, search_ratio=0.5)
+
+    print(Rres.keys())
+    print(avg_err)
+    print(r_error)
+    print(t_error)
