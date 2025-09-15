@@ -58,7 +58,7 @@ for i in tqdm(range(N),total=N):
 
     ellparams = np.array([ex,ey,ea,eb,etheta])
 
-    found_mc, another_mc = grid_search_refinement(ellparams, poly, K, r*2, search_ratio=0.5,ep=ep)
+    found_mc, another_mc = grid_search_refinement(ellparams, poly, K, r*2, search_ratio=0.5)
     print("found_mc:{}".format(found_mc))
     print("another_mc:{}".format(another_mc))
     print("uv_circular_center:{}".format(uv_circular_center))
