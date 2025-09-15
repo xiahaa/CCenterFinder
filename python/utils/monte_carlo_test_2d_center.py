@@ -3,13 +3,14 @@ import matplotlib.pyplot as plt
 import sys
 import cv2 as cv
 
-from ellipse_center_refinement import  *
-# from experiment_2d_refinement import  *
+# from ellipse_center_refinement import  *
+from experiment_2d_refinement import fit_ellipse
 import find_rectify_homography as frh
 from tqdm import tqdm, trange
 #%matplotlib qt
+from grid_seach_refinement import *
 
-N=1
+N=100
 res=np.zeros((N,),dtype='uint8')
 res2=np.zeros((N,),dtype='uint8')
 
@@ -35,42 +36,36 @@ for i in tqdm(range(N),total=N):
     uvraw = K @ Pcn
     uvraw2 = K @ Pcn2
 
-    uv = uvraw + np.vstack((np.random.randn(*uvraw[2, :].shape), np.zeros((1, uvraw.shape[1]))))
-    uv2 = uvraw2 + np.vstack((np.random.randn(*uvraw[2, :].shape), np.zeros((1, uvraw.shape[1]))))
+    uv = uvraw + np.vstack((np.random.randn(*uvraw[:2, :].shape), np.zeros((1, uvraw.shape[1]))))
+    uv2 = uvraw2 + np.vstack((np.random.randn(*uvraw[:2, :].shape), np.zeros((1, uvraw.shape[1]))))
 
     uv = uv[:2, :].astype(dtype='float32')
     uv2 = uv2[:2, :].astype(dtype='float32')
-    ell = cv.fitEllipse(uv.T)
-    ell2 = cv.fitEllipse(uv2.T)
 
-    ex = ell[0][0]
-    ey = ell[0][1]
-    ea = ell[1][0] * 0.5
-    eb = ell[1][1] * 0.5
-    etheta = ell[2] * np.pi / 180.0
+    ex,ey,ea,eb,etheta,ep,poly=fit_ellipse(uv)
+    ex2,ey2,ea2,eb2,etheta2,ep2,poly2=fit_ellipse(uv2)
 
-    # theta = np.linspace(0, np.pi * 2, 200)
-    Re = np.array([[np.cos(etheta), -np.sin(etheta)], [np.sin(etheta), np.cos(etheta)]])
-    ep = Re @ np.vstack((ea * np.cos(theta), eb * np.sin(theta))) + np.array([[ex], [ey]])
-
-    ex2 = ell2[0][0]
-    ey2 = ell2[0][1]
-    ea2 = ell2[1][0] * 0.5
-    eb2 = ell2[1][1] * 0.5
-    etheta2 = ell2[2] * np.pi / 180.0
-
-    # theta = np.linspace(0, np.pi * 2, 200)
-    Re2 = np.array([[np.cos(etheta2), -np.sin(etheta2)], [np.sin(etheta2), np.cos(etheta2)]])
-    ep2 = Re2 @ np.vstack((ea * np.cos(theta), eb * np.sin(theta))) + np.array([[ex2], [ey2]])
-
-    #
+    # get circle center projection
     circular_center = R@np.array([[0],[0],[0]])+t
     circular_center = circular_center/circular_center[-1,:]
     uv_circular_center = K@circular_center
 
-    poly = get_ellipse_polynomial_coeff(ell)
-    center = np.array(err[0])
+    # plot uv_circular_center and circular_center and ep
+    plt.figure(figsize=(10,10))
+    plt.scatter(uv_circular_center[0,:], uv_circular_center[1,:], color='blue', marker='o', label='uv_circular_center')
+    plt.scatter(ep[0,:], ep[1,:], color='green', marker='x', label='ep')
+    plt.legend()
 
+    ellparams = np.array([ex,ey,ea,eb,etheta])
+
+    found_mc, another_mc = grid_search_refinement(ellparams, poly, K, r*2, search_ratio=0.5,ep=ep)
+    print("found_mc:{}".format(found_mc))
+    print("another_mc:{}".format(another_mc))
+    print("uv_circular_center:{}".format(uv_circular_center))
+    print("np.linalg.norm(found_mc-uv_circular_center):{}".format(np.linalg.norm(found_mc-uv_circular_center)))
+    print("np.linalg.norm(another_mc-uv_circular_center):{}".format(np.linalg.norm(another_mc-uv_circular_center)))
+
+    center = np.array([ex,ey])
     new_center, centers = get_distance_with_gradient_descent(poly,center,1e-6,1e-3,1e-10,0,K,r*2)
     error = np.linalg.norm(uv_circular_center.squeeze()[:2]-new_center)
 
@@ -79,6 +74,7 @@ for i in tqdm(range(N),total=N):
         found_real=True
         res[i]=1
 
+    ell = [[ex,ey],[ea*2,eb*2],etheta*180.0/np.pi]
     H,Q,T=frh.findHomography(ell, new_center.squeeze()[:2])
     eph=np.vstack((ep,np.ones((1,ep.shape[1]))))
     ep2h=np.vstack((ep2,np.ones((1,ep.shape[1]))))
@@ -112,4 +108,3 @@ tn = np.nonzero(np.bitwise_and(res==0,res2==0))[0].shape[0]
 fn = np.nonzero(np.bitwise_and(res==1,res2==0))[0].shape[0]
 print("precision:{}, recall:{}".format((tp/(tp+fp),tp/(tp+fn))))
 print("accuracy:{}".format((tp+tn)/(tp+tn+fp+fn)))
-
