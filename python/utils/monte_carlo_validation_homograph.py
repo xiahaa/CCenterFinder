@@ -184,6 +184,15 @@ def _validation_single_trial(seed: int):
     ellparams = np.array([ex,ey,ea,eb,etheta])
     ellparams_alt = np.array([ex_alt,ey_alt,ea_alt,eb_alt,etheta_alt])
 
+    # compute center of mass using image moments
+    width = int(K[0,2]*2)
+    height = int(K[1,2]*2)
+    sim_img=np.zeros((height,width,1),dtype='uint8')
+    mask=cv.ellipse(sim_img,(int(ex),int(ey)),(int(ea),int(eb)),etheta*180/np.pi,0,360,(255,255,255),-1)
+    mm=cv.moments(mask)
+    mmcx = mm['m10'] / mm['m00']
+    mmcy = mm['m01'] / mm['m00']
+
     # ground truth center
     circular_center = R@np.array([[0],[0],[0]])+t
     circular_center = circular_center/circular_center[-1,:]
@@ -200,8 +209,26 @@ def _validation_single_trial(seed: int):
 
     # also return the ellipse center
     ellipse_center = np.array([ellparams[0], ellparams[1]])
+    mass_center = np.array([mmcx, mmcy])
 
-    return error_vector, real_mc, true_mc, false_found_mc, ellipse_center
+    return error_vector, real_mc, true_mc, false_found_mc, ellipse_center, mass_center
+
+def load_csv_and_plot(folder_name = 'analysis_output', output_dir = 'analysis_output'):
+    # load the csv files
+    error_vectors = np.loadtxt(os.path.join(folder_name, 'validation_error_vectors.csv'), delimiter=',', skiprows=1)
+    true_centers = np.loadtxt(os.path.join(folder_name, 'validation_true_centers.csv'), delimiter=',', skiprows=1)
+    real_centers = np.loadtxt(os.path.join(folder_name, 'validation_real_centers.csv'), delimiter=',', skiprows=1)
+    false_found_centers = np.loadtxt(os.path.join(folder_name, 'validation_false_found_centers.csv'), delimiter=',', skiprows=1)
+    ellipse_centers = np.loadtxt(os.path.join(folder_name, 'validation_ellipse_centers.csv'), delimiter=',', skiprows=1)
+    mass_centers = np.loadtxt(os.path.join(folder_name, 'validation_mass_centers.csv'), delimiter=',', skiprows=1)
+
+
+    # compute the error vector between the ellipse center and the real_mc
+    ell_error_data = np.array(ellipse_centers) - np.array(real_centers)
+    mass_error_data = np.array(mass_centers) - np.array(real_centers)
+
+    # plot the error distribution
+    plot_error_distribution(error_vectors, ell_error_data, mass_error_data, output_dir)
 
 def validation_test():
     parser = argparse.ArgumentParser()
@@ -228,18 +255,20 @@ def validation_test():
     real_centers = []
     false_found_centers = []
     ellipse_centers = []
+    mass_centers = []
 
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
         futures = [ex.submit(_validation_single_trial, s) for s in seeds]
         for f in tqdm(as_completed(futures), total=len(futures), desc='Monte Carlo (homograph validation)'):
             try:
                 result = f.result()
-                error_vec, real_mc, true_mc, false_found_mc, ellipse_center = result
+                error_vec, real_mc, true_mc, false_found_mc, ellipse_center, mass_center = result
                 error_vectors.append(error_vec)
                 true_centers.append(true_mc)
                 false_found_centers.append(false_found_mc)
                 real_centers.append(real_mc)
                 ellipse_centers.append(ellipse_center)
+                mass_centers.append(mass_center)
             except Exception:
                 continue
 
@@ -276,11 +305,18 @@ def validation_test():
                   ellipse_data, delimiter=',',
                   header='ellipse_x,ellipse_y', comments='')
 
+        # Save mass centers
+        mass_data = np.array(mass_centers)
+        np.savetxt(os.path.join(args.output_dir, 'validation_mass_centers.csv'),
+                  mass_data, delimiter=',',
+                  header='mass_x,mass_y', comments='')
+
         # compute the error vector between the ellipse center and the real_mc
         ell_error_data = np.array(ellipse_centers) - np.array(real_centers)
+        mass_error_data = np.array(mass_centers) - np.array(real_centers)
 
         # Plot error distribution
-        plot_error_distribution(error_data, ell_error_data, args.output_dir)
+        plot_error_distribution(error_data, ell_error_data, mass_error_data, args.output_dir)
 
         print("Saved error data and plots to {}".format(args.output_dir))
 
@@ -294,64 +330,130 @@ def validation_test():
                 print("ellipse_center:{}".format(ellipse_centers[i]))
                 print("--------------------------------")
 
-def plot_error_distribution(error_data, ell_error_data, output_dir):
+def plot_error_distribution(error_data, ell_error_data, mass_error_data, output_dir):
     """Plot 2D error distribution between true_mc and real_mc"""
+    # Set font to Arial
+    plt.rcParams['font.family'] = 'Arial'
+    plt.rcParams['font.size'] = 15
+
     dx = error_data[:, 0]
     dy = error_data[:, 1]
 
     # Create figure with subplots
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle('Error Distribution: Homography-selected vs Ground Truth Centers', fontsize=14)
+    fig, axes = plt.subplots(3, 2, figsize=(10, 14))
+    # fig.suptitle('Error Distribution', fontsize=15)
+    plt.subplots_adjust(left=0.25, top=0.92, hspace=0.3)  # Adjust left space for the colorbar
+
+    # build a color map by concatenating error_data, ell_error_data, mass_error_data's norm
+    error_magnitudes = np.concatenate([np.linalg.norm(error_data, axis=1), np.linalg.norm(ell_error_data, axis=1), np.linalg.norm(mass_error_data, axis=1)])
+
+    # define a color map
+    cmap = plt.cm.viridis
+    norm = plt.Normalize(vmin=np.min(error_magnitudes), vmax=np.max(error_magnitudes))
+
+    # find out color for error_data, ell_error_data, mass_error_data
+    error_colors = cmap(norm(np.linalg.norm(error_data, axis=1)))
+    ell_colors = cmap(norm(np.linalg.norm(ell_error_data, axis=1)))
+    mass_colors = cmap(norm(np.linalg.norm(mass_error_data, axis=1)))
 
     # 1. Scatter plot of errors
     ax1 = axes[0, 0]
-    scatter = ax1.scatter(dx, dy, alpha=0.6, s=20, c=np.linalg.norm(error_data, axis=1),
+    scatter = ax1.scatter(dx, dy, alpha=0.6, s=20, c=error_colors,
                          cmap='viridis', edgecolors='black', linewidth=0.5)
-    ax1.set_xlabel('Error in X (pixels)')
-    ax1.set_ylabel('Error in Y (pixels)')
-    ax1.set_title('2D Error Distribution')
+    # ax1.set_xlabel('Error in X (pixels)')
+    # ax1.set_ylabel('Error in Y (pixels)')
+    # ax1.set_title('Homography Error')
     ax1.grid(True, alpha=0.3)
     ax1.axhline(y=0, color='red', linestyle='--', alpha=0.7)
     ax1.axvline(x=0, color='red', linestyle='--', alpha=0.7)
-    plt.colorbar(scatter, ax=ax1, label='Error Magnitude (pixels)')
 
-    # 2. Histogram of X errors
+    # 2. Error magnitude distribution
     ax2 = axes[0, 1]
-    ax2.hist(dx, bins=30, alpha=0.7, color='blue', edgecolor='black')
-    ax2.set_xlabel('Error in X (pixels)')
-    ax2.set_ylabel('Frequency')
-    ax2.set_title('X Error Distribution')
+    error_magnitudes = np.linalg.norm(error_data, axis=1)
+    ax2.hist(error_magnitudes, bins=30, alpha=0.7, color='purple', edgecolor='black')
+    # ax2.set_xlabel('Error Magnitude (pixels)')
+    # ax2.set_ylabel('Frequency')
+    # ax2.set_title('Homography Error Magnitude')
     ax2.grid(True, alpha=0.3)
-    ax2.axvline(x=0, color='red', linestyle='--', alpha=0.7)
-    ax2.axvline(x=np.mean(dx), color='orange', linestyle='-', linewidth=2, label=f'Mean: {np.mean(dx):.2f}')
+    ax2.axvline(x=np.mean(error_magnitudes), color='orange', linestyle='-', linewidth=2,
+                label=f'Mean: {np.mean(error_magnitudes):.2f}')
+    ax2.axvline(x=np.median(error_magnitudes), color='red', linestyle='--', linewidth=2,
+                label=f'Median: {np.median(error_magnitudes):.2f}')
     ax2.legend()
 
-    # 3. Histogram of Y errors
+    # 3. Scatter plot of ell error
+    dx_ell = ell_error_data[:, 0]
+    dy_ell = ell_error_data[:, 1]
     ax3 = axes[1, 0]
-    ax3.hist(dy, bins=30, alpha=0.7, color='green', edgecolor='black')
-    ax3.set_xlabel('Error in Y (pixels)')
-    ax3.set_ylabel('Frequency')
-    ax3.set_title('Y Error Distribution')
+    scatter_ell = ax3.scatter(dx_ell, dy_ell, alpha=0.6, s=20, c=ell_colors,
+                              cmap='viridis', edgecolors='black', linewidth=0.5)
+    # ax3.set_xlabel('Error in X (pixels)')
+    ax3.set_ylabel('Error in Y (pixels)')
+    # ax3.set_title('Ellipse Error')
     ax3.grid(True, alpha=0.3)
+    ax3.axhline(y=0, color='red', linestyle='--', alpha=0.7)
     ax3.axvline(x=0, color='red', linestyle='--', alpha=0.7)
-    ax3.axvline(x=np.mean(dy), color='orange', linestyle='-', linewidth=2, label=f'Mean: {np.mean(dy):.2f}')
-    ax3.legend()
 
     # 4. Error magnitude distribution
     ax4 = axes[1, 1]
-    error_magnitudes = np.linalg.norm(error_data, axis=1)
-    ax4.hist(error_magnitudes, bins=30, alpha=0.7, color='purple', edgecolor='black')
-    ax4.set_xlabel('Error Magnitude (pixels)')
+    error_magnitudes_ell = np.linalg.norm(ell_error_data, axis=1)
+    ax4.hist(error_magnitudes_ell, bins=30, alpha=0.7, color='purple', edgecolor='black')
+    # ax4.set_xlabel('Error Magnitude (pixels)')
     ax4.set_ylabel('Frequency')
-    ax4.set_title('Error Magnitude Distribution')
+    # ax4.set_title('Ellipse Error Magnitude')
     ax4.grid(True, alpha=0.3)
-    ax4.axvline(x=np.mean(error_magnitudes), color='orange', linestyle='-', linewidth=2,
-                label=f'Mean: {np.mean(error_magnitudes):.2f}')
-    ax4.axvline(x=np.median(error_magnitudes), color='red', linestyle='--', linewidth=2,
-                label=f'Median: {np.median(error_magnitudes):.2f}')
+    ax4.axvline(x=np.mean(error_magnitudes_ell), color='orange', linestyle='-', linewidth=2,
+                label=f'Mean: {np.mean(error_magnitudes_ell):.2f}')
+    ax4.axvline(x=np.median(error_magnitudes_ell), color='red', linestyle='--', linewidth=2,
+                label=f'Median: {np.median(error_magnitudes_ell):.2f}')
     ax4.legend()
 
-    plt.tight_layout()
+    # 5. Scatter plot of mass error
+    dx_mass = mass_error_data[:, 0]
+    dy_mass = mass_error_data[:, 1]
+    ax5 = axes[2, 0]
+    scatter_mass = ax5.scatter(dx_mass, dy_mass, alpha=0.6, s=20, c=mass_colors,
+                              cmap='viridis', edgecolors='black', linewidth=0.5)
+    ax5.set_xlabel('Error in X (pixels)')
+    # ax5.set_ylabel('Error in Y (pixels)')
+    # ax5.set_title('Mass Center Error')
+    ax5.grid(True, alpha=0.3)
+    ax5.axhline(y=0, color='red', linestyle='--', alpha=0.7)
+    ax5.axvline(x=0, color='red', linestyle='--', alpha=0.7)
+    # plt.colorbar(scatter_mass, ax=ax5, label='Error Magnitude (pixels)')
+
+    # 6. Error magnitude distribution
+    ax6 = axes[2, 1]
+    error_magnitudes_mass = np.linalg.norm(mass_error_data, axis=1)
+    ax6.hist(error_magnitudes_mass, bins=30, alpha=0.7, color='purple', edgecolor='black')
+    ax6.set_xlabel('Error Magnitude (pixels)')
+    # ax6.set_ylabel('Frequency')
+    # ax6.set_title('Mass Center Error Magnitude')
+    ax6.grid(True, alpha=0.3)
+    ax6.axvline(x=np.mean(error_magnitudes_mass), color='orange', linestyle='-', linewidth=2,
+                label=f'Mean: {np.mean(error_magnitudes_mass):.2f}')
+    ax6.axvline(x=np.median(error_magnitudes_mass), color='red', linestyle='--', linewidth=2,
+                label=f'Median: {np.median(error_magnitudes_mass):.2f}')
+    ax6.legend()
+
+    # Create a ScalarMappable for the colorbar using the common cmap and norm
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])  # Dummy array for the ScalarMappable
+
+    # Add a single colorbar for the scatter plots in the first column
+    cbar_ax = fig.add_axes([0.05, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+    cbar = fig.colorbar(sm, cax=cbar_ax, orientation='vertical',
+                 fraction=0.8, pad=0.04, aspect=60)
+    # cbar.set_label('Error Magnitude (pixels)', labelpad=10, loc='top')
+    # Move the colorbar label to the left
+    cbar.ax.yaxis.set_label_position('left')
+    cbar.ax.yaxis.set_label_coords(-0.2, 0.5)  # Adjust these coordinates as needed
+    cbar.set_label('Error Magnitude (pixels)', labelpad=10, rotation=90)
+    # plt.tight_layout()
+    # Add a common title for each row
+    fig.text(0.5, 0.95, 'Refined Center', ha='center', fontsize=15, fontweight='bold')
+    fig.text(0.5, 0.65, 'Ellipse Center', ha='center', fontsize=15, fontweight='bold')
+    fig.text(0.5, 0.35, 'Mass Center', ha='center', fontsize=15, fontweight='bold')
 
     # Save the plot
     plt.savefig(os.path.join(output_dir, 'validation_error_distribution.png'),
@@ -362,10 +464,23 @@ def plot_error_distribution(error_data, ell_error_data, output_dir):
     print(f"\nError Statistics:")
     print(f"Mean X error: {np.mean(dx):.3f} ± {np.std(dx):.3f} pixels")
     print(f"Mean Y error: {np.mean(dy):.3f} ± {np.std(dy):.3f} pixels")
+    print(f"Mean X ellipse error: {np.mean(dx_ell):.3f} ± {np.std(dx_ell):.3f} pixels")
+    print(f"Mean Y ellipse error: {np.mean(dy_ell):.3f} ± {np.std(dy_ell):.3f} pixels")
+    print(f"Mean X mass error: {np.mean(dx_mass):.3f} ± {np.std(dx_mass):.3f} pixels")
+    print(f"Mean Y mass error: {np.mean(dy_mass):.3f} ± {np.std(dy_mass):.3f} pixels")
     print(f"Mean magnitude: {np.mean(error_magnitudes):.3f} ± {np.std(error_magnitudes):.3f} pixels")
+    print(f"Mean magnitude ellipse: {np.mean(error_magnitudes_ell):.3f} ± {np.std(error_magnitudes_ell):.3f} pixels")
+    print(f"Mean magnitude mass: {np.mean(error_magnitudes_mass):.3f} ± {np.std(error_magnitudes_mass):.3f} pixels")
     print(f"Median magnitude: {np.median(error_magnitudes):.3f} pixels")
+    print(f"Median magnitude ellipse: {np.median(error_magnitudes_ell):.3f} pixels")
+    print(f"Median magnitude mass: {np.median(error_magnitudes_mass):.3f} pixels")
     print(f"Max magnitude: {np.max(error_magnitudes):.3f} pixels")
+    print(f"Max magnitude ellipse: {np.max(error_magnitudes_ell):.3f} pixels")
+    print(f"Max magnitude mass: {np.max(error_magnitudes_mass):.3f} pixels")
     print(f"95th percentile: {np.percentile(error_magnitudes, 95):.3f} pixels")
+    print(f"95th percentile ellipse: {np.percentile(error_magnitudes_ell, 95):.3f} pixels")
+    print(f"95th percentile mass: {np.percentile(error_magnitudes_mass, 95):.3f} pixels")
+    print(f"95th percentile ellipse: {np.percentile(error_magnitudes_ell, 95):.3f} pixels")
 
 def _simulate_once(seed: int, fx: float, radius: float, radius_alt: float):
     rng = np.random.default_rng(seed)
@@ -491,4 +606,5 @@ def validdation_test_precision_recall():
 
 if __name__ == "__main__":
     # Run parallel validation test
-    validation_test()
+    # validation_test()
+    load_csv_and_plot()
