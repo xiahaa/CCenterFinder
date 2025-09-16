@@ -1,7 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
 import cv2 as cv
+import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils'))
+
 from grid_seach_refinement import *
 import find_rectify_homography as frh
 from experiment_2d_refinement import fit_ellipse
