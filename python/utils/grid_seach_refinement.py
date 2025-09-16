@@ -105,7 +105,7 @@ def grid_search_refinement(ell: np.ndarray, poly: np.ndarray, K:np.ndarray, radi
     all_centers=candidates
     all_scores=scores
 
-    picked = select_minima_with_suppression(all_centers, all_scores, k=2, suppress_radius=15)
+    picked = select_minima_with_suppression(all_centers, all_scores, k=2, suppress_radius=10)
     # Fallback if suppression returns less than 2
     if len(picked) < 2:
         ids = np.argsort(np.asarray(all_scores).reshape(-1))[:2]
