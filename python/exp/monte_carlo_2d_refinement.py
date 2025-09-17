@@ -371,14 +371,14 @@ def plot_error_bars(ellipse_center_errors, mass_center_errors,
         # Annotate the bars with their exact values
         for bar in bars:
             yval = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2, yval, f'{yval:.3f}', ha='center', va='bottom', fontsize=9)
+            ax.text(bar.get_x() + bar.get_width()/2, yval, f'{yval:.3f}', ha='center', va='bottom', fontsize=12)
 
     # Set x-ticks and labels
     ax.set_xticks(indices + bar_width * (num_methods - 1) / 2)
-    ax.set_xticklabels(error_types, rotation=10, ha='right', fontsize=20)
+    ax.set_xticklabels(error_types, rotation=10, ha='center', fontsize=20)
 
     # Add labels and title
-    ax.set_ylabel('Mean Error')
+    ax.set_ylabel('Mean Error', fontsize=20)
     # ax.set_title('Error Comparison Across Methods and Types')
 
     # Use a logarithmic scale if needed to emphasize smaller error values
@@ -393,9 +393,12 @@ def plot_error_bars(ellipse_center_errors, mass_center_errors,
     # Adjust layout for better appearance
     plt.tight_layout()
 
+    # set y ticks to fontsize 20
+    ax.tick_params(axis='y', labelsize=20)
+
     # Save the plot
     plt.savefig(os.path.join(output_dir, 'error_bar_comparison.png'),
-                dpi=300, bbox_inches='tight')
+                dpi=600, bbox_inches='tight')
     plt.close()
 
     print(f"Saved error bar comparison plot to {output_dir}/error_bar_comparison.png")
