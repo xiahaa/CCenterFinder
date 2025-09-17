@@ -9,6 +9,10 @@ from tqdm import tqdm,trange
 from joblib import Parallel, delayed
 import time
 
+# disable warnings
+import warnings
+warnings.filterwarnings("ignore")
+
 def generate_camera_pose():
     R = np.eye(3)
     dR = cv.Rodrigues(np.random.randn(3, 1)*0.4)[0]
@@ -36,7 +40,7 @@ def fit_ellipse(uv):
 
     theta = np.linspace(0, np.pi * 2, 200)
     R = np.array([[np.cos(etheta), -np.sin(etheta)], [np.sin(etheta), np.cos(etheta)]])
-    ep = R @ np.vstack((ea * np.cos(etheta), eb * np.sin(theta))) + np.array([[ex], [ey]])
+    ep = R @ np.vstack((ea * np.cos(etheta), eb * np.sin(etheta))) + np.array([[ex], [ey]])
 
     poly = get_ellipse_polynomial_coeff(ell)
     return ex, ey, ea, eb, etheta, ep, poly
@@ -51,6 +55,8 @@ def recover_pose(p3d, p2d, K, dist=np.zeros(5)):
 def evaluate_cost(outers, centers, K, marker_diameter):
     fs=[]
     for outer, c in zip(outers,centers):
+        c = c.reshape((3,))
+
         fc=eval_distance_f0(outer,c,K,marker_diameter)
         fs.append(fc)
     fs=np.array(fs)
@@ -60,7 +66,7 @@ def evaluate_cost(outers, centers, K, marker_diameter):
 def get_center_with_grid_search(polys, p3d, rpyt_samples, K, marker_diameter):
     costs=[]
     for rpyt in rpyt_samples:
-        rt=RpyToRt(rpyt[:3],rpyt[3:6])
+        rt=RpytToRt(rpyt[:3],rpyt[3:6])
         R=rt[:3,:3]
         t=rt[:3,3]
         centers=[]
@@ -79,7 +85,7 @@ def get_center_with_grid_search(polys, p3d, rpyt_samples, K, marker_diameter):
     return minimums, scores
 
 def func_single(polys, p3d, rpyt, K, marker_diameter):
-    rt = RpyToRt(rpyt[:3], rpyt[3:6])
+    rt = RpytToRt(rpyt[:3], rpyt[3:6])
     R = rt[:3, :3]
     t = rt[:3, 3]
     centers = []
@@ -93,7 +99,9 @@ def func_single(polys, p3d, rpyt, K, marker_diameter):
     return cost
 
 def get_centers_with_grid_search_parallel(polys, p3d, rpyt_samples, K, marker_diameter):
-    results = Parallel(n_jobs=-1)(delayed(func_single)(polys,p3d,rpyt,K,marker_diameter) for rpyt in rpyt_samples)
+    # show progress
+    print("Searching for centers with grid search...")
+    results = Parallel(n_jobs=-1)(delayed(func_single)(polys,p3d,rpyt,K,marker_diameter) for rpyt in tqdm(rpyt_samples))
     costs=np.array(results)
     ids = np.argsort(costs)
     minimums = rpyt_samples[ids[:2], :]
@@ -126,6 +134,8 @@ def RtToRpyt(rt):
     return rpy, t
 
 def RpytToRt(rpy, t):
+    rpy = rpy.reshape((3,))
+    t = t.reshape((3,))
     rpy = rpy * 180.0 / np.pi
     Rz = np.array([np.cos(rpy[2]), -np.sin(rpy[2]), 0, np.sin(rpy[2]), np.cos(rpy[2]), 0, 0,0,1]).reshape((3,3))
     Ry = np.array([np.cos(rpy[1]), 0, np.sin(rpy[1]), 0,1,0, -np.sin(rpy[1]), 0, np.cos(rpy[1])]).reshape((3,3))
@@ -226,7 +236,7 @@ def monte_carlo_experiment(search_range=3,search_step=1):
         Pc = R @ P + t
         Pcn = Pc / Pc[-1, :]
         uvraw = K @ Pcn
-        uv = uvraw + np.vstack((np.random.randn(*uvraw[2, :].shape), np.zeros((1, uvraw.shape[1]))))
+        uv = uvraw + np.vstack((np.random.randn(*uvraw[:2, :].shape), np.zeros((1, uvraw.shape[1]))))
 
         uv = uv[:2, :].astype(dtype='float32')
         ex, ey, ea, eb, etheta, ep, poly = fit_ellipse(uv)
@@ -254,12 +264,12 @@ def monte_carlo_experiment(search_range=3,search_step=1):
                 for x_search in np.arange(-search_range, search_range, search_step):
                     for y_search in np.arange(-search_range, search_range, search_step):
                         for z_search in np.arange(-search_range, search_range, search_step):
-                            rpy_samples.append(np.array(init_rpy[0]+r_search,\
+                            rpy_samples.append(np.array([init_rpy[0]+r_search,\
                                                         init_rpy[1]+p_search,\
                                                         init_rpy[2]+y_search,\
                                                         init_t[0]+x_search,\
                                                         init_t[1]+y_search,\
-                                                        init_t[2]+z_search))
+                                                        init_t[2]+z_search]))
 
     rpy_samples=np.array(rpy_samples)
 
@@ -279,7 +289,7 @@ def monte_carlo_experiment(search_range=3,search_step=1):
 
     rt_init=RpytToRt(init_rpy,init_t)
 
-    import sophus as sp
+    import sophuspy as sp
     Rinit = rt_init[:3,:3]
     tinit = rt_init[:3,3]
     errR1 = sp.SO3(R.T@Rres)
@@ -288,10 +298,13 @@ def monte_carlo_experiment(search_range=3,search_step=1):
     errR2 = sp.SO3(R.T@Rres)
     rotation_error_refine = np.linalg.norm(errR2.log())
 
+    print("rotation_error_init:")
+    print(rotation_error_init)
+    print("rotation_error_refine:")
+    print(rotation_error_refine)
+
     return Rinit, tinit, Rres, tres, R, t
 
 
 if __name__=='__main__':
-    pass
-
-
+    monte_carlo_experiment()
