@@ -6,7 +6,53 @@ import cv2 as cv
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from ellipse_center_refinement import *
 from typing import Optional
+import find_rectify_homography as frh
 
+def select_real_mc_using_homograph(ell, poly, ep, ep_alt, K, radius, nominal_ratio=1.0):
+    # do grid search on ell to find out two candidates
+    found_mc, another_mc = grid_search_refinement(ell, poly, K, radius*2, search_ratio=0.5)
+
+    min_ratio_error = np.inf
+    real_mc = None
+
+    ex,ey,ea,eb,etheta = ell
+    ell_cv = [[ex,ey],[ea*2,eb*2],etheta*180.0/np.pi]
+    for mc in [found_mc, another_mc]:
+        H,Q,T=frh.findHomography(ell_cv, mc.squeeze()[:2])
+        # to homogeneous coordinates
+        eph=np.vstack((ep,np.ones((1,ep.shape[1]))))
+        eph_alt=np.vstack((ep_alt,np.ones((1,ep_alt.shape[1]))))
+        # transform
+        epth=H@T@eph
+        epth_alt=H@T@eph_alt
+        # to non-homogeneous coordinates
+        epth=epth/epth[-1,:]
+        epth_alt = epth_alt / epth_alt[-1, :]
+
+        ##
+        cc=np.mean(epth,axis=1).reshape((3,1))
+        dist=np.linalg.norm(epth-cc,axis=0)
+        mean_redius = np.mean(dist)
+
+        ##
+        cc_alt = np.mean(epth_alt,axis=1).reshape((3,1))
+        dist = np.linalg.norm(epth_alt - cc_alt, axis=0)
+        mean_redius_alt = np.mean(dist)
+
+        ratio = mean_redius / (mean_redius_alt+1e-8)
+
+        if abs(ratio-nominal_ratio)<min_ratio_error:
+            min_ratio_error = abs(ratio-nominal_ratio)
+            real_mc = mc
+
+    # return also the false_found_mc as the one further to the real_mc
+    false_found_mc = None
+    if np.linalg.norm(found_mc-real_mc)>np.linalg.norm(another_mc-real_mc):
+        false_found_mc = found_mc
+    else:
+        false_found_mc = another_mc
+
+    return real_mc, false_found_mc
 
 def generate_masked_points(ell: np.ndarray, search_ratio: float, K: Optional[np.ndarray] = None) -> np.ndarray:
     ex, ey, ea, eb, etheta = ell

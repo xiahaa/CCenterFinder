@@ -168,7 +168,7 @@ def compute_reprojection_error(P, R, t, K, uv):
 def recover_pose(p3d, p2d, K, dist=np.zeros(5)):
     success, rvec, tvec, inliers = cv.solvePnPRansac(p3d,p2d,K,dist,flags=cv.SOLVEPNP_ITERATIVE, \
                                                      useExtrinsicGuess=False, iterationsCount=100,\
-                                                     reprojectionError=8,confidence=0.99)
+                                                     reprojectionError=2,confidence=0.99)
     R=cv.Rodrigues(rvec)[0]
     return R, tvec, inliers
 
