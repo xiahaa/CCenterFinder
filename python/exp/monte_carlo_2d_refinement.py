@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils'))
-from experiment_2d_refinement import generate_camera_pose, generate_points, fit_ellipse, recover_pose, compute_reprojection_error, compute_pose_error
+from utility import generate_camera_pose, generate_points, fit_ellipse, recover_pose, compute_reprojection_error, compute_pose_error
 from grid_seach_refinement import select_real_mc_using_homograph
 
 def _validation_single_trial(seed: int, num: int = 50):

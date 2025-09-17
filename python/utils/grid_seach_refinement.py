@@ -239,7 +239,7 @@ if __name__ == "__main__":
 
     uv = uv[:2, :].astype(dtype='float32')
 
-    from experiment_2d_refinement import fit_ellipse
+    from utility import fit_ellipse
     ex,ey,ea,eb,etheta,ep,poly=fit_ellipse(uv)
 
     ell = [ex,ey,ea,eb,etheta]

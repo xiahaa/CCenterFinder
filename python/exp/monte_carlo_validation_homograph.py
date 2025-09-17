@@ -7,7 +7,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 
 from grid_seach_refinement import *
 import find_rectify_homography as frh
-from experiment_2d_refinement import fit_ellipse
+from utility import fit_ellipse
 from tqdm import tqdm, trange
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import argparse
