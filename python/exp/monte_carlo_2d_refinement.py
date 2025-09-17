@@ -5,6 +5,8 @@ from tqdm import tqdm, trange
 import cv2 as cv
 import matplotlib.pyplot as plt
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils'))
 from experiment_2d_refinement import generate_camera_pose, generate_points, fit_ellipse, recover_pose, compute_reprojection_error, compute_pose_error
 from grid_seach_refinement import select_real_mc_using_homograph
 
@@ -260,10 +262,10 @@ def plot_error_comparison(ellipse_center_errors, mass_center_errors,
 
     # Set font to Arial
     plt.rcParams['font.family'] = 'Arial'
-    plt.rcParams['font.size'] = 15
+    plt.rcParams['font.size'] = 30
 
     # Create 1x3 subplots
-    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+    fig, axes = plt.subplots(1, 3, figsize=(20, 10))
 
     # Define error data and labels
     error_data = [ellipse_center_errors, mass_center_errors, true_minima_errors]
@@ -298,8 +300,9 @@ def plot_error_comparison(ellipse_center_errors, mass_center_errors,
             patch.set_linewidth(1.5)
 
         # Set labels and title
-        ax.set_title(error_type, fontweight='bold')
-        ax.set_ylabel('Error Magnitude', fontweight='bold')
+        # ax.set_title(error_type)
+        # ax.set_ylabel('Error Magnitude')
+        ax.set_ylabel(error_type)
 
         # Set x-axis labels
         # ax.set_xticks(positions)
@@ -316,8 +319,8 @@ def plot_error_comparison(ellipse_center_errors, mass_center_errors,
     legend_elements = [plt.Rectangle((0,0),1,1, facecolor=color, edgecolor=edge_color,
                                    alpha=0.7, label=label)
                       for color, edge_color, label in zip(colors, edge_colors, method_labels)]
-    fig.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, 0.05),
-               ncol=4, fontsize=12)
+    fig.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, 0.01),
+               ncol=4, fontsize=30)
 
     # Adjust layout and spacing
     plt.tight_layout()
@@ -354,7 +357,7 @@ def plot_error_bars(ellipse_center_errors, mass_center_errors,
     num_error_types = len(error_types)
 
     # Create a figure for the bar plot
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 10))
 
     # Set positions for each group of bars
     bar_width = 0.2
@@ -368,21 +371,21 @@ def plot_error_bars(ellipse_center_errors, mass_center_errors,
         # Annotate the bars with their exact values
         for bar in bars:
             yval = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2, yval, f'{yval:.2e}', ha='center', va='bottom', fontsize=9)
+            ax.text(bar.get_x() + bar.get_width()/2, yval, f'{yval:.3f}', ha='center', va='bottom', fontsize=9)
 
     # Set x-ticks and labels
     ax.set_xticks(indices + bar_width * (num_methods - 1) / 2)
-    ax.set_xticklabels(error_types, fontweight='bold')
+    ax.set_xticklabels(error_types, rotation=10, ha='right', fontsize=20)
 
     # Add labels and title
-    ax.set_ylabel('Mean Error', fontweight='bold')
-    ax.set_title('Error Comparison Across Methods and Types', fontweight='bold')
+    ax.set_ylabel('Mean Error')
+    # ax.set_title('Error Comparison Across Methods and Types')
 
     # Use a logarithmic scale if needed to emphasize smaller error values
     # ax.set_yscale('log')
 
     # Add legend
-    ax.legend(fontsize=12)
+    ax.legend(fontsize=20)
 
     # Add grid for better readability
     ax.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
