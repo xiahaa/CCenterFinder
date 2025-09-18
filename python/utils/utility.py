@@ -65,11 +65,18 @@ def compute_reprojection_error(P, R, t, K, uv):
     avgerr = np.mean(err)
     return err, avgerr
 
-def recover_pose(p3d, p2d, K, dist=np.zeros(5)):
-    success, rvec, tvec, inliers = cv.solvePnPRansac(p3d,p2d,K,dist,flags=cv.SOLVEPNP_ITERATIVE, \
-                                                     useExtrinsicGuess=False, iterationsCount=100,\
-                                                     reprojectionError=2,confidence=0.99)
-    R=cv.Rodrigues(rvec)[0]
+def recover_pose(p3d, p2d, K, dist=np.zeros(5), use_ransac=True):
+    if use_ransac:
+        success, rvec, tvec, inliers = cv.solvePnPRansac(p3d,p2d,K,dist,flags=cv.SOLVEPNP_ITERATIVE, \
+                                                         useExtrinsicGuess=False, iterationsCount=100,\
+                                                         reprojectionError=2,confidence=0.99)
+        R=cv.Rodrigues(rvec)[0]
+    else:
+        success, rvec, tvec = cv.solvePnP(p3d,p2d,K,dist,flags=cv.SOLVEPNP_EPNP , \
+                                         useExtrinsicGuess=False)
+        R=cv.Rodrigues(rvec)[0]
+        # set inliers to all indices
+        inliers = np.arange(p3d.shape[0])
     return R, tvec, inliers
 
 def compute_pose_error(Rres, tres, R, t):

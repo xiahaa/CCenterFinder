@@ -135,15 +135,16 @@ def validation_test(args):
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
         futures = [ex.submit(_validation_single_trial, s, args.num) for s in seeds]
         for f in tqdm(as_completed(futures), total=len(futures), desc='Monte Carlo (PnP refinement validation)'):
-            # try:
-            result = f.result()
-            avg_err, r_error, t_error, _, _, _, _ = result
-            avg_errs.append(avg_err)
-            r_errors.append(r_error)
-            t_errors.append(t_error)
+            try:
+                result = f.result()
+                avg_err, r_error, t_error, _, _, _, _ = result
+                avg_errs.append(avg_err)
+                r_errors.append(r_error)
+                t_errors.append(t_error)
 
-            # except Exception:
-                # continue
+            except Exception:
+                continue
+
 
     # get errors of each center
     real_center_errors = []
