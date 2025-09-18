@@ -1,7 +1,6 @@
 import numpy as np
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils'))
 from utility import recover_pose, compute_reprojection_error
 
 def ransac_validation(p3: np.ndarray, p2: np.ndarray, p2_alt: np.ndarray, K: np.ndarray):
