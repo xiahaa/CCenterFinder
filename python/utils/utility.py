@@ -3,7 +3,7 @@ import cv2 as cv
 import sophuspy as sp
 from ellipse_center_refinement import get_ellipse_polynomial_coeff
 
-def generate_camera_pose():
+def generate_camera_pose(rng: np.random.Generator | None = None):
     """
     Generate a camera pose that produces a visibly tilted ellipse projection.
 
@@ -13,7 +13,14 @@ def generate_camera_pose():
     - Keep Z forward and translation such that the projection is within frame.
     """
     # Fixed, strong tilt about X and Y to ensure ellipse (not circle)
-    rx, ry, rz = np.deg2rad([35.0, -25.0, 10.0])
+    # add some perturbation to the camera pose in degree -5 - 5
+    if rng is None:
+        rng = np.random.default_rng()
+    rx, ry, rz = np.deg2rad([
+        35.0 + (rng.standard_normal()*10 - 5),
+        -25.0 + (rng.standard_normal()*10 - 5),
+        10.0 + (rng.standard_normal()*10 - 5)
+    ])
     Rx = np.array([[1, 0, 0],
                    [0, np.cos(rx), -np.sin(rx)],
                    [0, np.sin(rx),  np.cos(rx)]])
@@ -27,16 +34,19 @@ def generate_camera_pose():
 
     # Translation: shift right and down a bit, and forward in Z
     # Push ellipse towards image edge and closer to camera so part may fall outside
-    t = np.array([[1.6],
-                  [-0.9],
-                  [3.5]])
+    # add some perturbation to the translation in m from -0.5 to 0.5
+    t = np.array([[1.6 + (rng.standard_normal()*0.5 - 0.25)],
+                  [-0.9 + (rng.standard_normal()*0.5 - 0.25)],
+                  [3.5 + (rng.standard_normal()*0.5 - 0.25)]])
 
     return R, t
 
-def generate_points(r):
+def generate_points(r, rng: np.random.Generator | None = None):
     theta = np.linspace(0,np.pi*2,200)
     P = np.vstack((r*np.cos(theta),r*np.sin(theta),np.zeros((1,200))))
-    c3d = np.random.rand(3,1)*5
+    if rng is None:
+        rng = np.random.default_rng()
+    c3d = rng.random((3,1))*5
     P = P+c3d
     return P, c3d
 
@@ -65,11 +75,11 @@ def compute_reprojection_error(P, R, t, K, uv):
     avgerr = np.mean(err)
     return err, avgerr
 
-def recover_pose(p3d, p2d, K, dist=np.zeros(5), use_ransac=True):
+def recover_pose(p3d, p2d, K, dist=np.zeros(5), use_ransac=True, ransac_threshold=2):
     if use_ransac:
         success, rvec, tvec, inliers = cv.solvePnPRansac(p3d,p2d,K,dist,flags=cv.SOLVEPNP_ITERATIVE, \
                                                          useExtrinsicGuess=False, iterationsCount=100,\
-                                                         reprojectionError=2,confidence=0.99)
+                                                         reprojectionError=ransac_threshold,confidence=0.99)
         R=cv.Rodrigues(rvec)[0]
     else:
         success, rvec, tvec = cv.solvePnP(p3d,p2d,K,dist,flags=cv.SOLVEPNP_EPNP , \

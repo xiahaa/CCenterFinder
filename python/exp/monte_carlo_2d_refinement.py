@@ -21,7 +21,7 @@ def _validation_single_trial(seed: int, num: int = 50):
     fx = 600
     K = np.array([[fx, 0, 640], [0, fx, 480], [0, 0, 1]], dtype='float32')
     # generate a camera pose
-    R,t=generate_camera_pose()
+    R,t=generate_camera_pose(rng)
 
     # point buffers
     p3d=np.zeros((num,3),dtype='float32')
@@ -35,22 +35,22 @@ def _validation_single_trial(seed: int, num: int = 50):
     for i in trange(num, desc='point generation'):
         while True:
             # generate a 3D point of a circle
-            P,c3d=generate_points(radius)
+            P,c3d=generate_points(radius, rng)
             Pc=R@P+t
             Pcn=Pc/Pc[-1,:]
             uvraw=K@Pcn
-            uv=uvraw+np.vstack((np.random.randn(*(uvraw[:2,:].shape)),np.zeros((1,uvraw.shape[1]))))
+            uv=uvraw+np.vstack((rng.standard_normal(size=uvraw[:2,:].shape),np.zeros((1,uvraw.shape[1]))))
             uv=uv[:2,:].astype(dtype='float32')
             ex,ey,ea,eb,etheta,ep,poly=fit_ellipse(uv)
             ellparams = np.array([ex,ey,ea,eb,etheta])
             ellipse_center = np.array([ex,ey])
 
             # generate another non-co-centric circle
-            P_alt,c3d_alt=generate_points(radius_alt)
+            P_alt,c3d_alt=generate_points(radius_alt, rng)
             Pc_alt=R@P_alt+t
             Pcn_alt=Pc_alt/Pc_alt[-1,:]
             uvraw_alt=K@Pcn_alt
-            uv_alt=uvraw_alt+np.vstack((np.random.randn(*(uvraw_alt[:2,:].shape)),np.zeros((1,uvraw_alt.shape[1]))))
+            uv_alt=uvraw_alt+np.vstack((rng.standard_normal(size=uvraw_alt[:2,:].shape),np.zeros((1,uvraw_alt.shape[1]))))
             uv_alt=uv_alt[:2,:].astype(dtype='float32')
             _,_,_,_,_,ep_alt,_=fit_ellipse(uv_alt)
 
@@ -77,9 +77,9 @@ def _validation_single_trial(seed: int, num: int = 50):
         # make a numpy of ell
         true_minima, false_minima = select_real_mc_using_homograph(ellparams, poly, ep, ep_alt, K, radius, nominal_ratio)
 
-        print("real_center:{}".format(real_center))
-        print("true_minima:{}".format(true_minima))
-        print("false_minima:{}".format(false_minima))
+        # print("real_center:{}".format(real_center))
+        # print("true_minima:{}".format(true_minima))
+        # print("false_minima:{}".format(false_minima))
 
         p3d[i,:]=c3d.T
         p2d['ellipse_center'][i,:]=ellipse_center
@@ -141,10 +141,8 @@ def validation_test(args):
                 avg_errs.append(avg_err)
                 r_errors.append(r_error)
                 t_errors.append(t_error)
-
             except Exception:
                 continue
-
 
     # get errors of each center
     real_center_errors = []
