@@ -4,7 +4,7 @@ import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils'))
 from utility import recover_pose, compute_reprojection_error, compute_pose_error
-from ransac_2c_center_refinement import ransac_validation
+from ransac_2d_center_refinement import ransac_validation
 import matplotlib.pyplot as plt
 
 
