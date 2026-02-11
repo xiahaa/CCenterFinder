@@ -310,7 +310,7 @@ bool fit_circle_cga(const std::vector<cv::Point3d>& points,
         double fit_radius;
 
         // Use the robust fitting method
-        int result = ConformalFit3DCicle::Fit(points, fit_center, fit_radius);
+        int result = ConformalFit3DCircle::Fit(points, fit_center, fit_radius);
 
         if (result == 0 && fit_radius > 0 && fit_center.allFinite()) {
             center = fit_center;
@@ -318,7 +318,7 @@ bool fit_circle_cga(const std::vector<cv::Point3d>& points,
             return true;
         } else {
             // Fallback to standard fitting
-            result = ConformalFit3DCicle::Fit(points, fit_center, fit_radius);
+            result = ConformalFit3DCircle::Fit(points, fit_center, fit_radius);
             if (result == 0 && fit_radius > 0 && fit_center.allFinite()) {
                 center = fit_center;
                 radius = fit_radius;

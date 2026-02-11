@@ -97,6 +97,7 @@ public:
     {
         // Convert sample points to cv::Point3d format for CGA fitting
         std::vector<cv::Point3d> pcd;
+        pcd.reserve(samples.size());
         for (auto itr = samples.begin(); itr != samples.end(); itr++)
         {
             const Point3& p = data[*itr];
@@ -418,8 +419,9 @@ int main(int argc, const char * argv[])
 
         // Generate parameter values for circle points
         std::vector<double> tlist;
-        double ang = 0;
         const double step = 2*M_PI / 150.0;  // 150 points around the circle
+        tlist.reserve(static_cast<size_t>(2*M_PI / step) + 1);
+        double ang = 0;
         while (ang <= 2*M_PI)
         {
             tlist.push_back(ang);
@@ -458,8 +460,9 @@ int main(int argc, const char * argv[])
 
         // Generate fewer points for RANSAC (computational efficiency)
         std::vector<double> tlist;
-        double ang = 0;
         const double step = 2*M_PI / 100.0;  // 100 points around the circle
+        tlist.reserve(static_cast<size_t>(2*M_PI / step) + 1);
+        double ang = 0;
         while (ang <= 2*M_PI)
         {
             tlist.push_back(ang);
@@ -477,6 +480,7 @@ int main(int argc, const char * argv[])
 
         // Convert to Point3 format and add noise to inlier points
         std::vector<Point3> ransac_points;
+        ransac_points.reserve(circle_points.size() + num_outliers);
         for (int i = 0; i < circle_points.size(); ++i)
         {
             cv::Point3d pt(circle_points[i].x + PerturbDist(RNG),
@@ -547,7 +551,7 @@ int main(int argc, const char * argv[])
     // Perform the actual circle fitting
     Timer fit_timer;
     fit_timer.tic();
-    ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
+    ConformalFit3DCircle::Fit(circle_points, fit_center, fit_radius);
     fit_timer.toc(std::string("Circle Fitting: "));
 
     // Output results

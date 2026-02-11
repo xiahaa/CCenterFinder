@@ -1,13 +1,13 @@
 //
-//  fit3dcicle.hpp
-//  fit3dcicle
+//  Fit3DCircle.hpp
+//  Fit3DCircle
 //
 //  Created by xiao.hu on 2023/8/9.
 //  Copyright © 2023 xiao.hu. All rights reserved.
 //
 
-#ifndef fit3dcicle_hpp
-#define fit3dcicle_hpp
+#ifndef FIT3DCIRCLE_HPP
+#define FIT3DCIRCLE_HPP
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,9 +16,9 @@
 #include <Eigen/Dense>
 #include <Eigen/Core>
 
-class ConformalFit3DCicle{
+class ConformalFit3DCircle{
 private:
-    ConformalFit3DCicle() = default;
+    ConformalFit3DCircle() = default;
 
 public:
     template <typename Derived>
@@ -97,6 +97,11 @@ public:
         auto einfi = e.template segment<3>(6);//e.middleRows(6,3);
         auto eoinf = -e[9];
         auto alpha = eoi.norm();
+        
+        // Check for division by zero
+        if (alpha <= std::numeric_limits<Scalar_t>::epsilon())
+            return -1;
+            
         auto n1 = -eoi/alpha;
         auto n = -eoi;
         auto B0 = eoinf;
@@ -148,4 +153,4 @@ public:
 
 };
 
-#endif /* fit3dcicle_hpp */
+#endif /* FIT3DCIRCLE_HPP */
