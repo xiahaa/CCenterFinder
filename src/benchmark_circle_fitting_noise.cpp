@@ -60,7 +60,7 @@ int find_circle_cga(pcl::PointCloud<pcl::PointXYZ> &cloud, Eigen::Vector3d &cent
     Eigen::Matrix<double, 3, 1> fit_center;
     double fit_radius;
 
-    ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
+    ConformalFit3DCircle::Fit(circle_points, fit_center, fit_radius);
 
     center = fit_center;
     radius = fit_radius;

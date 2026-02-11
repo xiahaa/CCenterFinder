@@ -160,10 +160,9 @@ namespace robust_cga
     private:
         // Skew-symmetric matrix helper
         template <typename Derived3, typename Derived33>
-        static void Skew(const Eigen::MatrixBase<Derived3> &x, Eigen::MatrixBase<Derived33> const &xhat_in)
+        static void Skew(const Eigen::MatrixBase<Derived3> &x, Eigen::MatrixBase<Derived33> &xhat)
         {
             using Scalar = typename Derived3::Scalar;
-            Eigen::MatrixBase<Derived33> &xhat = const_cast<Eigen::MatrixBase<Derived33> &>(xhat_in);
             xhat.derived().resize(3, 3);
             xhat.derived() << Scalar(0), -x(2), x(1),
                              x(2), Scalar(0), -x(0),
@@ -174,9 +173,8 @@ namespace robust_cga
         template <typename Derived51, typename Derived52, typename Derived10>
         static void OuterProduct(const Eigen::MatrixBase<Derived51> &y,
                               const Eigen::MatrixBase<Derived52> &x,
-                              Eigen::MatrixBase<Derived10> const &e_in)
+                              Eigen::MatrixBase<Derived10> &e)
         {
-            Eigen::MatrixBase<Derived10> &e = const_cast<Eigen::MatrixBase<Derived10> &>(e_in);
             using Scalar = typename Derived51::Scalar;
             Eigen::Matrix<Scalar, 3, 3> yhat;
             Skew(y.template head<3>(), yhat);
@@ -197,17 +195,15 @@ namespace robust_cga
         // Recover center, radius, normal from e (10x1)
         template <typename Derived10, typename Derived3>
         static int RecoverParameters(const Eigen::MatrixBase<Derived10> &e,
-                                   Eigen::MatrixBase<Derived3> const &center_in,
+                                   Eigen::MatrixBase<Derived3> &center,
                                    typename Derived3::Scalar &radius_out,
                                    Eigen::Matrix<typename Derived3::Scalar, 3, 1> &normal_out)
         {
             using Scalar = typename Derived3::Scalar;
-            Eigen::MatrixBase<Derived3> &center = const_cast<Eigen::MatrixBase<Derived3> &>(center_in);
-            Eigen::Matrix<Scalar, 10, 1> ee = e.derived();
-            Eigen::Matrix<Scalar, 3, 1> ei = ee.template head<3>();
-            Eigen::Matrix<Scalar, 3, 1> eoi = ee.template segment<3>(3);
-            Eigen::Matrix<Scalar, 3, 1> einfi = ee.template segment<3>(6);
-            Scalar eoinf = -ee(9);
+            Eigen::Matrix<Scalar, 3, 1> ei = e.template head<3>();
+            Eigen::Matrix<Scalar, 3, 1> eoi = e.template segment<3>(3);
+            Eigen::Matrix<Scalar, 3, 1> einfi = e.template segment<3>(6);
+            Scalar eoinf = -e(9);
 
             Scalar alpha = eoi.norm();
             if (alpha <= std::numeric_limits<Scalar>::epsilon())

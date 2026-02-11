@@ -329,7 +329,7 @@ int main(int argc, const char * argv[]) {
             Eigen::Matrix<double, 3, 1> fit_center;
             double fit_radius;
 
-            // ConformalFit3DCicle::Fit(circle_points, fit_center, fit_radius);
+            // ConformalFit3DCircle::Fit(circle_points, fit_center, fit_radius);
             find_circle_cga(cloud, fit_center, fit_radius, 0.2, 1000);
 
             // std::cout << "center pcl: " << center_pcl.transpose() << " radius pcl: " << radius_pcl << std::endl;
