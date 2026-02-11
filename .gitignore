@@ -1,0 +1,83 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+out/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Compiled Object files
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Static libraries
+*.a
+*.lib
+
+# Executables
+*.out
+*.app
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+*.egg
+
+# Results and output directories
+results/
+analysis_output/
+*.txt
+!CMakeLists.txt
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.vcxproj.filters
+*.vcxproj.user
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data files (optional - uncomment if needed)
+# *.pcd
+# *.ply
+# *.xyz
